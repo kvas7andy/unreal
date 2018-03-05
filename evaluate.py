@@ -3,6 +3,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import traceback
+
 import tensorflow as tf
 import numpy as np
 
@@ -69,21 +71,26 @@ class Evaluate(object):
 
 
 def main(args):
-  gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)  # avoid using all gpu memory
-  sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-  sess.run(tf.global_variables_initializer())
-  
-  evaluate = Evaluate()
-  saver = tf.train.Saver()
-  checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
-  if checkpoint and checkpoint.model_checkpoint_path:
-    saver.restore(sess, checkpoint.model_checkpoint_path)
-    print("checkpoint loaded:", checkpoint.model_checkpoint_path)
-  else:
-    print("Could not find old checkpoint")
+  try:
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)  # avoid using all gpu memory
+    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+    sess.run(tf.global_variables_initializer())
 
-  while not evaluate.is_done():
-    evaluate.update(sess)
+    evaluate = Evaluate()
+    saver = tf.train.Saver()
+    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+      saver.restore(sess, checkpoint.model_checkpoint_path)
+      print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+    else:
+      print("Could not find old checkpoint")
+
+    while not evaluate.is_done():
+      evaluate.update(sess)
+  except Exception as e:
+    print(traceback.format_exc())
+  finally:
+    evaluate.environment.stop()
 
     
 if __name__ == '__main__':

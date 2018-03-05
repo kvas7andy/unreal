@@ -10,6 +10,8 @@ import os
 from collections import deque
 import pygame
 
+import traceback
+
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import ExperienceFrame
@@ -287,53 +289,61 @@ class Display(object):
 
 
 def main(args):
+
   sess = tf.Session()
   sess.run(tf.global_variables_initializer())
-  
-  display_size = (440, 400)
-  display = Display(display_size)
-  saver = tf.train.Saver()
-  checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
-  if checkpoint and checkpoint.model_checkpoint_path:
-    saver.restore(sess, checkpoint.model_checkpoint_path)
-    print("checkpoint loaded:", checkpoint.model_checkpoint_path)
-  else:
-    print("Could not find old checkpoint")
+  try:
+    display_size = (440, 400)
+    display = Display(display_size)
+    saver = tf.train.Saver()
+    #checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    #if checkpoint and checkpoint.model_checkpoint_path:
+    #  saver.restore(sess, checkpoint.model_checkpoint_path)
+    #  print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+    #else:
+    #  print("Could not find old checkpoint")
+    checkpoint_file = tf.train.latest_checkpoint(flags.checkpoint_dir)
+    print(checkpoint_file)
+    saver.restore(sess, checkpoint_file)
 
-  clock = pygame.time.Clock()
-  
-  running = True
-  FPS = 15
+    clock = pygame.time.Clock()
 
-  if flags.recording:
-    writer = MovieWriter("out.mov", display_size, FPS)
-  
-  if flags.frame_saving:
-    frame_count = 0
-    if not os.path.exists(flags.frame_save_dir):
-      os.mkdir(flags.frame_save_dir)
-      
-  while running:
-    for event in pygame.event.get():
-      if event.type == pygame.QUIT:
-        running = False
-        
-    display.update(sess)
-    clock.tick(FPS)
-    
-    if flags.recording or flags.frame_saving:
-      frame_str = display.get_frame()
-      d = np.fromstring(frame_str, dtype=np.uint8)
-      d = d.reshape((display_size[1], display_size[0], 3))
-      if flags.recording:
-        writer.add_frame(d)
-      else:
-        frame_file_path = "{0}/{1:06d}.png".format(flags.frame_save_dir, frame_count)
-        cv2.imwrite(frame_file_path, d)
-        frame_count += 1
-  
-  if flags.recording:
-    writer.close()
+    running = True
+    FPS = 15
+
+    if flags.recording:
+      writer = MovieWriter("out.mov", display_size, FPS)
+
+    if flags.frame_saving:
+      frame_count = 0
+      if not os.path.exists(flags.frame_save_dir):
+        os.mkdir(flags.frame_save_dir)
+
+    while running:
+      for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+          running = False
+
+      display.update(sess)
+      clock.tick(FPS)
+
+      if flags.recording or flags.frame_saving:
+        frame_str = display.get_frame()
+        d = np.fromstring(frame_str, dtype=np.uint8)
+        d = d.reshape((display_size[1], display_size[0], 3))
+        if flags.recording:
+          writer.add_frame(d)
+        else:
+          frame_file_path = "{0}/{1:06d}.png".format(flags.frame_save_dir, frame_count)
+          cv2.imwrite(frame_file_path, d)
+          frame_count += 1
+
+    if flags.recording:
+      writer.close()
+  except Exception as e:
+    print(traceback.format_exc())
+  finally:
+    display.environment.stop()
 
     
 if __name__ == '__main__':
