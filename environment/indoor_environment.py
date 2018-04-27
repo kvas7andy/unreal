@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import numpy as np
 import os
+import time
 
 from environment import environment
 from minos.lib.RoomSimulator import RoomSimulator

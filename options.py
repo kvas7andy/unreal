@@ -4,6 +4,8 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+import os
+import time
 
 
 def get_options(option_type):
@@ -28,7 +30,9 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
 
-    tf.app.flags.DEFINE_string("log_dir", "./logs", "log file directory")
+    tf.app.flags.DEFINE_string("log_dir",
+                               os.path.join("./logs", tf.app.flags.FLAGS.env_name + '_' + time.strftime("%Y_%m_%d_%H_%M_%S")),
+                              "log file directory")
     tf.app.flags.DEFINE_float("initial_alpha_low", 1e-4, "log_uniform low limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_high", 5e-3, "log_uniform high limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")
