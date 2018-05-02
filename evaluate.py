@@ -15,6 +15,7 @@ from options import get_options
 
 # get command line args
 flags = get_options("evaluate")
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 class Evaluate(object):
   def __init__(self):
@@ -72,7 +73,7 @@ class Evaluate(object):
 
 def main(args):
   try:
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)  # avoid using all gpu memory
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=1.0)  # avoid using all gpu memory
     sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
     sess.run(tf.global_variables_initializer())
 

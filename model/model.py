@@ -5,6 +5,11 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
+from layers_object import conv_layer, up_sampling, max_pool, initialization, \
+    variable_with_weight_decay
+import json
+
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 
 # weight initialization based on muupan's code
@@ -38,6 +43,9 @@ class UnrealModel(object):
                pixel_change_lambda,
                entropy_beta,
                device,
+               segnet_param_dict,
+               image_shape,
+               is_training,
                for_display=False):
     self._device = device
     self._action_size = action_size
@@ -49,10 +57,20 @@ class UnrealModel(object):
     self._use_reward_prediction = use_reward_prediction
     self._pixel_change_lambda = pixel_change_lambda
     self._entropy_beta = entropy_beta
-    self._image_shape = [84,84] # Note much of network parameters are hard coded so if we change image shape, other parameters will need to change
+    self.segnet_mode = segnet_param_dict['segnet_mode']
+    self._image_shape = image_shape #[480,360] # [w, h]: Note much of network parameters are hard coded so if we change image shape, other parameters will need to change
+
+    self.for_display = for_display
+
+    self.num_classes = segnet_param_dict['num_classes']
+    self.use_vgg = segnet_param_dict['use_vgg']
+    self.vgg_param_dict = segnet_param_dict['vgg_param_dict']
+    self.bayes = segnet_param_dict['bayes']
+
+    self.is_training = is_trainingf
 
     self._create_network(for_display)
-    
+
   def _create_network(self, for_display):
     scope_name = "net_{0}".format(self._thread_index)
     with tf.device(self._device), tf.variable_scope(scope_name) as scope:
@@ -60,7 +78,7 @@ class UnrealModel(object):
       self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
       
       # [base A3C network]
-      self._create_base_network()
+      self._create_base_network(for_display)
 
       # [Pixel change network]
       if self._use_pixel_change:
@@ -81,7 +99,7 @@ class UnrealModel(object):
       self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope_name)
 
 
-  def _create_base_network(self):
+  def _create_base_network(self, for_display=False):
     # State (Base image input)
     self.base_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3], name='base_input')
 
@@ -89,7 +107,7 @@ class UnrealModel(object):
     self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
     # Conv layers
-    base_conv_output = self._base_conv_layers(self.base_input)
+    base_conv_output = self.encoder(self.base_input, for_display)
     
     if self._use_lstm:
       # LSTM layer
@@ -113,16 +131,81 @@ class UnrealModel(object):
       self.base_v  = self._base_value_layer(self.base_fcn_outputs)  # value output
 
     
-  def _base_conv_layers(self, state_input, reuse=False):
+  def encoder(self, state_input, reuse=False, for_display=False):
     with tf.variable_scope("base_conv", reuse=reuse) as scope:
-      # Weights
-      W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1") # 16 8x8 filters
-      W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2") # 32 4x4 filters
+      if self.segnet_mode  > 0:
+        #self.is_training = tf.placeholder_with_default(True, shape=[], name="is_training_pl")
+        #self.with_dropout_pl = tf.placeholder(tf.bool, name="with_dropout")
+        #??self.keep_prob_pl = tf.placeholder(tf.float32, shape=None, name="keep_rate")
+        #self.labels_pl = tf.placeholder(tf.int64, [None, self.input_h, self.input_w, 1])
 
-      # Nodes
-      h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 4) + b_conv1) # stride=4 => 19x19x16
-      h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2 => 9x9x32
-      return h_conv2
+        # Before enter the images into the architecture, we need to do Local Contrast Normalization
+        # But it seems a bit complicated, so we use Local Response Normalization which implement in Tensorflow
+        # Reference page:https://www.tensorflow.org/api_docs/python/tf/nn/local_response_normalization
+        self.norm1 = tf.nn.lrn(state_input, depth_radius=5, bias=1.0, alpha=0.0001, beta=0.75, name='norm1')
+        # first box of convolution layer,each part we do convolution two times, so we have conv1_1, and conv1_2
+        self.conv1_1 = conv_layer(self.norm1, "conv1_1", [3, 3, 3, 64], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv1_2 = conv_layer(self.conv1_1, "conv1_2", [3, 3, 64, 64], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.pool1, self.pool1_index, self.shape_1 = max_pool(self.conv1_2, 'pool1')
+
+        # Second box of convolution layer(4)
+        self.conv2_1 = conv_layer(self.pool1, "conv2_1", [3, 3, 64, 128], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv2_2 = conv_layer(self.conv2_1, "conv2_2", [3, 3, 128, 128], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.pool2, self.pool2_index, self.shape_2 = max_pool(self.conv2_2, 'pool2')
+
+        # Third box of convolution layer(7)
+        self.conv3_1 = conv_layer(self.pool2, "conv3_1", [3, 3, 128, 256], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv3_2 = conv_layer(self.conv3_1, "conv3_2", [3, 3, 256, 256], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv3_3 = conv_layer(self.conv3_2, "conv3_3", [3, 3, 256, 256], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.pool3, self.pool3_index, self.shape_3 = max_pool(self.conv3_3, 'pool3')
+
+        # Fourth box of convolution layer(10)
+        if self.bayes:
+          self.dropout1 = tf.layers.dropout(self.pool3, rate=(1 - self.keep_prob_pl),
+                                            training=self.with_dropout_pl, name="dropout1")
+          self.conv4_1 = conv_layer(self.dropout1, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
+                                    self.vgg_param_dict)
+        else:
+          self.conv4_1 = conv_layer(self.pool3, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
+                                    self.vgg_param_dict)
+        self.conv4_2 = conv_layer(self.conv4_1, "conv4_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv4_3 = conv_layer(self.conv4_2, "conv4_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.pool4, self.pool4_index, self.shape_4 = max_pool(self.conv4_3, 'pool4')
+
+        # Fifth box of convolution layers(13)
+        if self.bayes:
+          self.dropout2 = tf.layers.dropout(self.pool4, rate=(1 - self.keep_prob_pl),
+                                            training=self.with_dropout_pl, name="dropout2")
+          self.conv5_1 = conv_layer(self.dropout2, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                    self.vgg_param_dict)
+        else:
+          self.conv5_1 = conv_layer(self.pool4, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                    self.vgg_param_dict)
+        self.conv5_2 = conv_layer(self.conv5_1, "conv5_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.conv5_3 = conv_layer(self.conv5_2, "conv5_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
+                                  self.vgg_param_dict)
+        self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
+
+        return self.pool5
+      else:
+        # Weights
+        W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1") # 16 8x8 filters
+        W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2") # 32 4x4 filters
+
+        # Nodes
+        h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 4) + b_conv1) # stride=4 => 19x19x16
+        h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2 => 9x9x32
+        return h_conv2
 
 
   def _base_fcn_layer(self, conv_output, last_action_reward_objective_input,
@@ -145,10 +228,14 @@ class UnrealModel(object):
                        reuse=False):
     with tf.variable_scope("base_lstm", reuse=reuse) as scope:
       # Weights (9x9x32=2592)
-      W_fc1, b_fc1 = self._fc_variable([2592, 256], "base_fc1")
+      # 360x480 input: 12x15x512=92160
+      #print(tf.shape(conv_output).value)
+      conv_output_ravel = np.prod(conv_output.get_shape().as_list()[1:])
+
+      W_fc1, b_fc1 = self._fc_variable([conv_output_ravel, 256], "base_fc1")
 
       # Nodes
-      conv_output_flat = tf.reshape(conv_output, [-1, 2592])
+      conv_output_flat = tf.reshape(conv_output, [-1, conv_output_ravel])
       # (-1,9,9,32) -> (-1,2592)
       conv_output_fc = tf.nn.relu(tf.matmul(conv_output_flat, W_fc1) + b_fc1)
       # (unroll_step, 256)
@@ -204,7 +291,7 @@ class UnrealModel(object):
     self.pc_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
     # pc conv layers
-    pc_conv_output = self._base_conv_layers(self.pc_input, reuse=True)
+    pc_conv_output = self.encoder(self.pc_input, reuse=True)
 
     if self._use_lstm:
       # pc lstm layers
@@ -269,7 +356,7 @@ class UnrealModel(object):
     self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
     # VR conv layers
-    vr_conv_output = self._base_conv_layers(self.vr_input, reuse=True)
+    vr_conv_output = self.encoder(self.vr_input, reuse=True)
 
     if self._use_lstm:
       # pc lstm layers
@@ -291,12 +378,13 @@ class UnrealModel(object):
     self.rp_input = tf.placeholder("float", [3, self._image_shape[0], self._image_shape[1], 3])
 
     # RP conv layers
-    rp_conv_output = self._base_conv_layers(self.rp_input, reuse=True)
-    rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,9*9*32*3])
-    
+    rp_conv_output = self.encoder(self.rp_input, reuse=True)
+    rp_conv_output_ravel = np.prod(rp_conv_output.get_shape().as_list())
+    rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,rp_conv_output_ravel])
+
     with tf.variable_scope("rp_fc") as scope:
       # Weights
-      W_fc1, b_fc1 = self._fc_variable([9*9*32*3, 3], "rp_fc1")
+      W_fc1, b_fc1 = self._fc_variable([rp_conv_output_ravel, 3], "rp_fc1")
 
     # Reawrd prediction class output. (zero, positive, negative)
     self.rp_c = tf.nn.softmax(tf.matmul(rp_conv_output_reshaped, W_fc1) + b_fc1)
@@ -398,24 +486,27 @@ class UnrealModel(object):
     if self._use_lstm:
       pi_out, v_out, self.base_lstm_state_out = sess.run( [self.base_pi, self.base_v, self.base_lstm_state],
                                                           feed_dict = {self.base_input : [s_t['image']],
+                                                                       self.is_training: not self.for_display,
                                                                        self.base_last_action_reward_input : [last_action_reward],
                                                                        self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
                                                                        self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
     else:
       pi_out, v_out = sess.run([self.base_pi, self.base_v],
                                feed_dict = {self.base_input : [s_t['image']],
+                                            self.is_training: not self.for_display,
                                             self.base_last_action_reward_input : [last_action_reward]} )
 
     # pi_out: (1,3), v_out: (1)
     return (pi_out[0], v_out[0])
 
-  
+
   def run_base_policy_value_pc_q(self, sess, s_t, last_action_reward):
     # For display tool.
     if self._use_lstm:
       pi_out, v_out, self.base_lstm_state_out, q_disp_out, q_max_disp_out = \
           sess.run( [self.base_pi, self.base_v, self.base_lstm_state, self.pc_q_disp, self.pc_q_max_disp],
                     feed_dict = {self.base_input : [s_t['image']],
+                                 self.is_training: not self.for_display,
                                  self.base_last_action_reward_input : [last_action_reward],
                                  self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
                                  self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
@@ -423,12 +514,13 @@ class UnrealModel(object):
       pi_out, v_out, q_disp_out, q_max_disp_out = \
         sess.run( [self.base_pi, self.base_v, self.pc_q_disp, self.pc_q_max_disp],
                   feed_dict = {self.base_input : [s_t['image']],
+                               self.is_training: not self.for_display,
                                self.base_last_action_reward_input : [last_action_reward] })
 
     # pi_out: (1,3), v_out: (1), q_disp_out(1,20,20, action_size)
     return (pi_out[0], v_out[0], q_disp_out[0])
 
-  
+
   def run_base_value(self, sess, s_t, last_action_reward):
     # This run_base_value() is used for calculating V for bootstrapping at the
     # end of LOCAL_T_MAX time step sequence.
@@ -437,35 +529,39 @@ class UnrealModel(object):
     if self._use_lstm:
       v_out, _ = sess.run( [self.base_v, self.base_lstm_state],
                            feed_dict = {self.base_input : [s_t['image']],
+                                        self.is_training: not self.for_display,
                                         self.base_last_action_reward_input : [last_action_reward],
                                         self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
                                         self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
     else:
       v_out = sess.run( self.base_v,
                         feed_dict = {self.base_input : [s_t['image']],
+                                     self.is_training: not self.for_display,
                                      self.base_last_action_reward_input : [last_action_reward]} )
     return v_out[0]
 
-  
+
   def run_pc_q_max(self, sess, s_t, last_action_reward):
     q_max_out = sess.run( self.pc_q_max,
                           feed_dict = {self.pc_input : [s_t['image']],
+                                       self.is_training: not self.for_display,
                                        self.pc_last_action_reward_input : [last_action_reward]} )
     return q_max_out[0]
 
-  
+
   def run_vr_value(self, sess, s_t, last_action_reward):
     vr_v_out = sess.run( self.vr_v,
                          feed_dict = {self.vr_input : [s_t['image']],
+                                      self.is_training: not self.for_display,
                                       self.vr_last_action_reward_input : [last_action_reward]} )
     return vr_v_out[0]
 
-  
+
   def run_rp_c(self, sess, state_history):
     # For display tool
     frames = [s_t['image'] for s_t in state_history]
     rp_c_out = sess.run( self.rp_c,
-                         feed_dict = {self.rp_input : frames} )
+                         feed_dict = {self.rp_input : frames, self.is_training: not self.for_display} )
     return rp_c_out[0]
 
   

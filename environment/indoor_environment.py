@@ -68,6 +68,7 @@ class IndoorEnvironment(environment.Environment):
         image = np.dstack([image, image, image])
     else:  # assume rgba
         image = image[:, :, :-1]
+    image = image.reshape((image.shape[1], image.shape[0], image.shape[2]))
     image = image.astype(np.float32)
     image = image / 255.0
     return image

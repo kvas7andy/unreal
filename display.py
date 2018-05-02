@@ -25,6 +25,7 @@ WHITE = (255, 255, 255)
 
 # get command line args
 flags = get_options("display")
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 
 class MovieWriter(object):
@@ -100,7 +101,7 @@ class Display(object):
                                       flags.use_reward_prediction,
                                       0.0,
                                       0.0,
-                                      "/cpu:0",
+                                      "/gpu:0",
                                       for_display=True)
     self.environment = Environment.create_environment(flags.env_type, flags.env_name,
                                                       env_args={'episode_schedule': flags.split,
@@ -145,7 +146,10 @@ class Display(object):
     data = pixel_change_.astype(np.uint8)
     data = np.stack([data for _ in range(3)], axis=2)
     data = self.scale_image(data, 4)
-    image = pygame.image.frombuffer(data, (20*4,20*4), 'RGB')
+    if label == "PC":
+      image = pygame.image.frombuffer(data, (476, 356), 'RGB')
+    else:
+      image = pygame.image.frombuffer(data, (80, 80), 'RGB')
     self.surface.blit(image, (left+8+4, top+8+4))
     self.draw_center_text(label, left + 100/2, top + 100)
     
@@ -170,8 +174,8 @@ class Display(object):
     """
     state_ = state * 255.0
     data = state_.astype(np.uint8)
-    image = pygame.image.frombuffer(data, (84,84), 'RGB')
-    self.surface.blit(image, (8, 8))
+    image = pygame.image.frombuffer(data, (480,360), 'RGB')
+    self.surface.blit(image, (8, 6))
     self.draw_center_text("input", 50, 100)
 
   def show_value(self):
@@ -244,6 +248,10 @@ class Display(object):
     self.draw_text("REWARD: {}".format(int(self.episode_reward)), 310, 10)
 
   def process(self, sess):
+    sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+
+    #sess.run(tf.initialize_all_variables())
+
     last_action = self.environment.last_action
     last_reward = np.clip(self.environment.last_reward, -1, 1)
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action, self.action_size,
@@ -290,8 +298,13 @@ class Display(object):
 
 def main(args):
 
-  sess = tf.Session()
-  sess.run(tf.global_variables_initializer())
+  # prepare session
+  config = tf.ConfigProto(allow_soft_placement=True)
+  # log_device_placement = False,
+
+  config.gpu_options.allow_growth = True
+
+  sess = tf.Session(config=config)
   try:
     display_size = (440, 400)
     display = Display(display_size)
@@ -304,7 +317,10 @@ def main(args):
     #  print("Could not find old checkpoint")
     checkpoint_file = tf.train.latest_checkpoint(flags.checkpoint_dir)
     print(checkpoint_file)
-    saver.restore(sess, checkpoint_file)
+    if checkpoint_file is None:
+      pass
+    else:
+      saver.restore(sess, checkpoint_file)
 
     clock = pygame.time.Clock()
 

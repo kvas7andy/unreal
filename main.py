@@ -10,6 +10,10 @@ import signal
 import math
 import os
 import time
+import json
+import numpy as np
+
+import minos.config.sim_config as sim_config
 
 from environment.environment import Environment
 from model.model import UnrealModel
@@ -23,6 +27,22 @@ USE_GPU = True # To use GPU, set True
 flags = get_options("training")
 
 Environment.set_log_dir(flags.log_dir)
+
+#### Logging in file
+# import logging
+#
+# # get TF logger
+# log = logging.getLogger('tensorflow')
+# log.setLevel(logging.DEBUG)
+#
+# # create formatter and add it to the handlers
+# formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#
+# # create file handler which logs even debug messages
+# fh = logging.FileHandler('tensorflow.log')
+# fh.setLevel(logging.DEBUG)
+# fh.setFormatter(formatter)
+# log.addHandler(fh)
 
 def log_uniform(lo, hi, rate):
   log_lo = math.log(lo)
@@ -69,6 +89,31 @@ class Application(object):
     device = "/cpu:0"
     if USE_GPU:
       device = "/gpu:0"
+
+
+    env_config = sim_config.get(flags.env_name)
+    self.image_shape = [env_config['width'], env_config['height']]
+
+    if flags.segnet:
+      with open(flags.segnet_config) as f:
+        self.config = json.load(f)
+
+      self.num_classes = self.config["NUM_CLASSES"]
+      self.use_vgg = self.config["USE_VGG"]
+
+      if self.use_vgg is False:
+        self.vgg_param_dict = None
+        print("No VGG path in config, so learning from scratch")
+      else:
+        self.vgg16_npy_path = self.config["VGG_FILE"]
+        self.vgg_param_dict = np.load(self.vgg16_npy_path, encoding='latin1').item()
+        print("VGG parameter loaded")
+
+      self.bayes = self.config["BAYES"]
+      segnet_param_dict = {'segnet_mode': flags.segnet, 'vgg_param_dict': self.vgg_param_dict, 'use_vgg': self.use_vgg,
+                       'num_classes': self.num_classes, 'bayes': self.bayes}
+    else:
+      segnet_param_dict = {'segnet_mode': flags.segnet}
     
     initial_learning_rate = log_uniform(flags.initial_alpha_low,
                                         flags.initial_alpha_high,
@@ -83,6 +128,8 @@ class Application(object):
                                               flags.env_name)
     objective_size = Environment.get_objective_size(flags.env_type, flags.env_name)
 
+    is_training = tf.placeholder(tf.bool, name="training")
+
     self.global_network = UnrealModel(action_size,
                                       objective_size,
                                       -1,
@@ -92,10 +139,14 @@ class Application(object):
                                       flags.use_reward_prediction,
                                       flags.pixel_change_lambda,
                                       flags.entropy_beta,
-                                      device)
+                                      device,
+                                      segnet_param_dict=segnet_param_dict,
+                                      image_shape=self.image_shape,
+                                      is_training=is_training)
     self.trainers = []
     
     learning_rate_input = tf.placeholder("float")
+
     
     grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
                                   decay = flags.rmsp_alpha,
@@ -123,12 +174,17 @@ class Application(object):
                         flags.gamma_pc,
                         flags.experience_history_size,
                         flags.max_time_step,
-                        device)
+                        device,
+                        segnet_param_dict=segnet_param_dict,
+                        image_shape=self.image_shape,
+                        is_training=is_training)
       self.trainers.append(trainer)
     
     # prepare session
-    config = tf.ConfigProto(log_device_placement=False,
-                            allow_soft_placement=True)
+    config = tf.ConfigProto(allow_soft_placement = True)
+    #log_device_placement = False,
+    #
+    tf.logging.set_verbosity(tf.logging.DEBUG)
     config.gpu_options.allow_growth = True
     self.sess = tf.Session(config=config)
     
@@ -143,7 +199,7 @@ class Application(object):
                                                 self.sess.graph)
     
     # init or load checkpoint with saver
-    self.saver = tf.train.Saver(self.global_network.get_vars(), max_to_keep=0)
+    self.saver = tf.train.Saver(self.global_network.get_vars(), max_to_keep=10)
     
     checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
     if checkpoint and checkpoint.model_checkpoint_path:

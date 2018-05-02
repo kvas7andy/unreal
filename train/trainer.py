@@ -34,7 +34,10 @@ class Trainer(object):
                gamma_pc,
                experience_history_size,
                max_global_time_step,
-               device):
+               device,
+               segnet_param_dict,
+               image_shape,
+               is_training):
 
     self.thread_index = thread_index
     self.learning_rate_input = learning_rate_input
@@ -51,6 +54,8 @@ class Trainer(object):
     self.max_global_time_step = max_global_time_step
     self.action_size = Environment.get_action_size(env_type, env_name)
     self.objective_size = Environment.get_objective_size(env_type, env_name)
+
+    self.is_training = is_training
     
     self.local_network = UnrealModel(self.action_size,
                                      self.objective_size,
@@ -61,7 +66,11 @@ class Trainer(object):
                                      use_reward_prediction,
                                      pixel_change_lambda,
                                      entropy_beta,
-                                     device)
+                                     device,
+                                     segnet_param_dict=segnet_param_dict,
+                                     image_shape=image_shape,
+                                     is_training=is_training)
+
     self.local_network.prepare_loss()
 
     self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
@@ -404,6 +413,8 @@ class Trainer(object):
         self.local_network.rp_c_target: batch_rp_c
       }
       feed_dict.update(rp_feed_dict)
+      feed_dict.update({self.is_training: True})
+
 
     # Calculate gradients and copy them to global network.
     sess.run( self.apply_gradients, feed_dict=feed_dict )
