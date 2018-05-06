@@ -6,6 +6,8 @@ from __future__ import print_function
 import numpy as np
 import time
 
+import tensorflow as tf
+
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
@@ -13,6 +15,8 @@ from train.experience import Experience, ExperienceFrame
 LOG_INTERVAL = 100
 PERFORMANCE_LOG_INTERVAL = 1000
 
+
+run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
 
 class Trainer(object):
   def __init__(self,
@@ -30,6 +34,7 @@ class Trainer(object):
                pixel_change_lambda,
                entropy_beta,
                local_t_max,
+               n_step_TD,
                gamma,
                gamma_pc,
                experience_history_size,
@@ -48,6 +53,7 @@ class Trainer(object):
     self.use_value_replay = use_value_replay
     self.use_reward_prediction = use_reward_prediction
     self.local_t_max = local_t_max
+    self.n_step_TD = n_step_TD
     self.gamma = gamma
     self.gamma_pc = gamma_pc
     self.experience_history_size = experience_history_size
@@ -120,20 +126,22 @@ class Trainer(object):
     """
     Fill experience buffer until buffer is full.
     """
+    #print("Start experience filling", flush=True)
     prev_state = self.environment.last_state
     last_action = self.environment.last_action
     last_reward = self.environment.last_reward
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action,
                                                                   self.action_size,
                                                                   last_reward, prev_state)
-    
+
+    #print("Local network run base policy, value!", flush=True)
     pi_, _ = self.local_network.run_base_policy_and_value(sess,
                                                           self.environment.last_state,
                                                           last_action_reward)
     action = self.choose_action(pi_)
     
     new_state, reward, terminal, pixel_change = self.environment.process(action)
-    
+
     frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
                             last_action, last_reward)
     self.experience.add_frame(frame)
@@ -151,7 +159,7 @@ class Trainer(object):
       elapsed_time = time.time() - self.start_time
       steps_per_sec = global_t / elapsed_time
       print("### Performance : {} STEPS in {:.0f} sec. {:.0f} STEPS/sec. {:.2f}M STEPS/hour".format(
-        global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
+        global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.), flush=True)
       # print("### Experience : {}".format(self.experience.get_debug_string()))
     
 
@@ -170,7 +178,7 @@ class Trainer(object):
       start_lstm_state = self.local_network.base_lstm_state_out
 
     # t_max times loop
-    for _ in range(self.local_t_max):
+    for _ in range(self.n_step_TD):
       # Prepare last action reward
       last_action = self.environment.last_action
       last_reward = self.environment.last_reward
@@ -191,8 +199,9 @@ class Trainer(object):
       values.append(value_)
 
       if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
+        print("Local step {}:".format(self.local_t))
         print("pi={}".format(pi_))
-        print(" V={}".format(value_))
+        print("V={}".format(value_), flush=True)
 
       prev_state = self.environment.last_state
 
@@ -204,6 +213,9 @@ class Trainer(object):
       # Store to experience
       self.experience.add_frame(frame)
 
+      # Use to know about Experience collection
+      #print(self.experience.get_debug_string())
+
       self.episode_reward += reward
 
       rewards.append( reward )
@@ -212,7 +224,7 @@ class Trainer(object):
 
       if terminal:
         terminal_end = True
-        print("score={}".format(self.episode_reward))
+        print("score={}".format(self.episode_reward), flush=True)
 
         self._record_score(sess, summary_writer, summary_op, score_input,
                            self.episode_reward, global_t)
@@ -251,16 +263,21 @@ class Trainer(object):
     batch_a.reverse()
     batch_adv.reverse()
     batch_R.reverse()
-    
-    return batch_si, last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state
+
+    ## HERE Mathematical Error A3C: only last values should be used for base/ or aggregate with last made
+
+    return [batch_si[0]], [last_action_rewards[0]], [batch_a[0]], [batch_adv[0]], [batch_R[0]], start_lstm_state
 
   
   def _process_pc(self, sess):
     # [pixel change]
     # Sample 20+1 frame (+1 for last next state)
+    #print(">>> Process run!", flush=True)
     pc_experience_frames = self.experience.sample_sequence(self.local_t_max+1)
     # Reverse sequence to calculate from the last
-    pc_experience_frames.reverse()
+    # pc_experience_frames.reverse()
+    pc_experience_frames = pc_experience_frames[::-1]
+    #print(">>> Process ran!", flush=True)
 
     batch_pc_si = []
     batch_pc_a = []
@@ -273,13 +290,15 @@ class Trainer(object):
                                              pc_experience_frames[0].state,
                                              pc_experience_frames[0].get_last_action_reward(self.action_size))
 
+    #print(">>> Process run!", flush=True)
 
     for frame in pc_experience_frames[1:]:
+
       pc_R = frame.pixel_change + self.gamma_pc * pc_R
       a = np.zeros([self.action_size])
       a[frame.action] = 1.0
       last_action_reward = frame.get_last_action_reward(self.action_size)
-      
+
       batch_pc_si.append(frame.state['image'])
       batch_pc_a.append(a)
       batch_pc_R.append(pc_R)
@@ -289,7 +308,8 @@ class Trainer(object):
     batch_pc_a.reverse()
     batch_pc_R.reverse()
     batch_pc_last_action_reward.reverse()
-    
+
+    #print(">>> Process ended!", flush=True)
     return batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R
 
   
@@ -350,7 +370,9 @@ class Trainer(object):
   
   
   def process(self, sess, global_t, summary_writer, summary_op, score_input):
+
     # Fill experience replay buffer
+    #print("Inside train process of thread!", flush=True)
     if not self.experience.is_full():
       self._fill_experience(sess)
       return 0
@@ -359,10 +381,14 @@ class Trainer(object):
 
     cur_learning_rate = self._anneal_learning_rate(global_t)
 
+    print("Weights copying!", flush=True)
     # Copy weights from shared to local
     sess.run( self.sync )
+    #print("Weights copied successfully!", flush=True)
+
 
     # [Base]
+    print("[Base]", flush=True)
     batch_si, batch_last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state = \
           self._process_base(sess,
                              global_t,
@@ -382,6 +408,7 @@ class Trainer(object):
     if self.use_lstm:
       feed_dict[self.local_network.base_initial_lstm_state] = start_lstm_state
 
+    print("[Pixel change]", flush=True)
     # [Pixel change]
     if self.use_pixel_change:
       batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R = self._process_pc(sess)
@@ -394,6 +421,7 @@ class Trainer(object):
       }
       feed_dict.update(pc_feed_dict)
 
+    print("[Value replay]", flush=True)
     # [Value replay]
     if self.use_value_replay:
       batch_vr_si, batch_vr_last_action_reward, batch_vr_R = self._process_vr(sess)
@@ -406,6 +434,7 @@ class Trainer(object):
       feed_dict.update(vr_feed_dict)
 
     # [Reward prediction]
+    print("[Reward prediction]", flush=True)
     if self.use_reward_prediction:
       batch_rp_si, batch_rp_c = self._process_rp()
       rp_feed_dict = {
@@ -416,8 +445,9 @@ class Trainer(object):
       feed_dict.update({self.is_training: True})
 
 
+    print("Applying gradients in train!", flush=True)
     # Calculate gradients and copy them to global network.
-    sess.run( self.apply_gradients, feed_dict=feed_dict )
+    sess.run( self.apply_gradients, feed_dict=feed_dict, options=run_options)
     
     self._print_log(global_t)
     

@@ -9,8 +9,7 @@ from layers_object import conv_layer, up_sampling, max_pool, initialization, \
     variable_with_weight_decay
 import json
 
-tf.logging.set_verbosity(tf.logging.DEBUG)
-
+from erfnet import *
 
 # weight initialization based on muupan's code
 # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
@@ -62,12 +61,16 @@ class UnrealModel(object):
 
     self.for_display = for_display
 
-    self.num_classes = segnet_param_dict['num_classes']
-    self.use_vgg = segnet_param_dict['use_vgg']
-    self.vgg_param_dict = segnet_param_dict['vgg_param_dict']
-    self.bayes = segnet_param_dict['bayes']
+    self.num_classes = segnet_param_dict.get('num_classes', None)
+    self.use_vgg = segnet_param_dict.get('use_vgg', None)
+    self.vgg_param_dict = segnet_param_dict.get('vgg_param_dict', None)
+    self.bayes = segnet_param_dict.get('bayes', None)
 
-    self.is_training = is_trainingf
+    self.is_training = is_training
+
+    self.l2 = 2e-4
+
+    print("Network start creation in tread {}!".format(self._thread_index), flush=True)
 
     self._create_network(for_display)
 
@@ -133,7 +136,7 @@ class UnrealModel(object):
     
   def encoder(self, state_input, reuse=False, for_display=False):
     with tf.variable_scope("base_conv", reuse=reuse) as scope:
-      if self.segnet_mode  > 0:
+      if self.segnet_mode  == 1:
         #self.is_training = tf.placeholder_with_default(True, shape=[], name="is_training_pl")
         #self.with_dropout_pl = tf.placeholder(tf.bool, name="with_dropout")
         #??self.keep_prob_pl = tf.placeholder(tf.float32, shape=None, name="keep_rate")
@@ -197,6 +200,32 @@ class UnrealModel(object):
         self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
 
         return self.pool5
+      elif self.segnet_mode == 2:
+
+        #n_classes = self.n_classes, alpha = self.alpha, dropout = self.dropout, l2 = self.l2_scale, is_training = self.is_training
+        with tf.name_scope("preprocess") as scope:
+          x = tf.div(state_input, 255., name="rescaled_inputs")
+
+        x = downsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="d1")
+
+        x = downsample(x, n_filters=64, is_training=self.is_training, l2=self.l2, name="d2")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres3")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres4")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres5")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres6")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres7")
+
+        # TODO: Use dilated convolutions
+        x = downsample(x, n_filters=128, is_training=self.is_training, l2=self.l2, name="d8")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres9")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres10")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres11")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres12")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres13")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres14")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres15")
+        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres16")
+        return x
       else:
         # Weights
         W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1") # 16 8x8 filters

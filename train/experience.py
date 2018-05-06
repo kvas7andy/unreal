@@ -62,7 +62,7 @@ class Experience(object):
   def add_frame(self, frame):
     if frame.terminal and len(self._frames) > 0 and self._frames[-1].terminal:
       # Discard if terminal frame continues
-      print("Terminal frames continued.")
+      print("Terminal frames continued.", flush=True)
       return
 
     frame_index = self._top_frame_index + len(self._frames)
@@ -112,6 +112,7 @@ class Experience(object):
       sampled_frames.append(frame)
       if frame.terminal:
         break
+        # Need to sample maximum of sequence_size
     
     return sampled_frames
 

@@ -69,6 +69,7 @@ class IndoorEnvironment(environment.Environment):
     else:  # assume rgba
         image = image[:, :, :-1]
     image = image.reshape((image.shape[1], image.shape[0], image.shape[2]))
+    #Reshape is essential, when non-square image from simulator!
     image = image.astype(np.float32)
     image = image / 255.0
     return image
@@ -77,6 +78,7 @@ class IndoorEnvironment(environment.Environment):
     real_action = IndoorEnvironment.ACTION_LIST[action]
 
     full_state = self._sim.step(real_action)
+    #print("Step made")
     self._last_full_state = full_state  # Last observed state
     obs = full_state['observation']['sensors']['color']['data']
     reward = full_state['rewards']

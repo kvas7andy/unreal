@@ -9,7 +9,10 @@ import threading
 import signal
 import math
 import os
+import sys
 import time
+import traceback
+
 import json
 import numpy as np
 
@@ -28,6 +31,7 @@ flags = get_options("training")
 
 Environment.set_log_dir(flags.log_dir)
 
+tf.logging.set_verbosity(tf.logging.ERROR)
 #### Logging in file
 # import logging
 #
@@ -64,26 +68,42 @@ class Application(object):
     
     # set start_time
     trainer.set_start_time(self.start_time)
+    print("Trainer ", parallel_index, " process start!", flush=True)
   
     while True:
+      print("Trainer {0}: {1} {2} {3}".format(parallel_index, self.stop_requested,
+                                              self.terminate_reqested, self.global_t), flush=True)
+
       if self.stop_requested:
+        print("Trainer ", parallel_index, ": stop requested!", flush=True)
         break
       if self.terminate_reqested:
+        print("Trainer ", parallel_index, ": terminate_reqested => process stop!", flush=True)
         trainer.stop()
         break
       if self.global_t > flags.max_time_step:
+        print("Trainer ", parallel_index, ": end of training!", flush=True)
         trainer.stop()
         break
       if parallel_index == 0 and self.global_t > self.next_save_steps:
         # Save checkpoint
         self.save()
-  
-      diff_global_t = trainer.process(self.sess,
-                                      self.global_t,
-                                      self.summary_writer,
-                                      self.summary_op,
-                                      self.score_input)
-      self.global_t += diff_global_t
+
+      try:
+        diff_global_t = trainer.process(self.sess,
+                                        self.global_t,
+                                        self.summary_writer,
+                                        self.summary_op,
+                                        self.score_input)
+        self.global_t += diff_global_t
+      except Exception as e:
+        trainer.stop()
+        ## Let it be here!!!
+        print(traceback.format_exc(), flush=True)
+        print("Trainer ", parallel_index, " process Error!", flush=True)
+        break
+
+    print("Trainer ", parallel_index, " after while stop!", flush=True)
 
   def run(self):
     device = "/cpu:0"
@@ -92,7 +112,7 @@ class Application(object):
 
 
     env_config = sim_config.get(flags.env_name)
-    self.image_shape = [env_config['width'], env_config['height']]
+    self.image_shape = [env_config['height'], env_config['width']]
 
     if flags.segnet:
       with open(flags.segnet_config) as f:
@@ -129,6 +149,8 @@ class Application(object):
     objective_size = Environment.get_objective_size(flags.env_type, flags.env_name)
 
     is_training = tf.placeholder(tf.bool, name="training")
+
+    print("Global network initializing!", flush=True)
 
     self.global_network = UnrealModel(action_size,
                                       objective_size,
@@ -170,6 +192,7 @@ class Application(object):
                         flags.pixel_change_lambda,
                         flags.entropy_beta,
                         flags.local_t_max,
+                        flags.n_step_TD,
                         flags.gamma,
                         flags.gamma_pc,
                         flags.experience_history_size,
@@ -181,15 +204,19 @@ class Application(object):
       self.trainers.append(trainer)
     
     # prepare session
-    config = tf.ConfigProto(allow_soft_placement = True)
-    #log_device_placement = False,
-    #
-    tf.logging.set_verbosity(tf.logging.DEBUG)
+    config = tf.ConfigProto(allow_soft_placement = True, log_device_placement = False)
     config.gpu_options.allow_growth = True
     self.sess = tf.Session(config=config)
-    
+
+    # Wrap sess.run for debugging messages!
+    def run_(*args, **kwargs):
+      #print(">>> RUN!", args[0] if args else None, flush=True)
+      return self.sess.__run(*args, **kwargs)  # getattr(self, "__run")(self, *args, **kwargs)
+    self.sess.__run, self.sess.run = self.sess.run, run_
+
     self.sess.run(tf.global_variables_initializer())
-    
+
+
     # summary for tensorboard
     self.score_input = tf.placeholder(tf.int32)
     tf.summary.scalar("score", self.score_input)
@@ -230,11 +257,12 @@ class Application(object):
   
     # set start time
     self.start_time = time.time() - self.wall_t
-  
+
+    print("Ready to start")
     for t in self.train_threads:
       t.start()
   
-    print('Press Ctrl+C to stop')
+    print('Press Ctrl+C to stop', flush=True)
     signal.pause()
 
   def save(self):
@@ -244,38 +272,48 @@ class Application(object):
     self.stop_requested = True
   
     # Wait for all other threads to stop
+    print("Waiting for childs!", flush=True)
     for (i, t) in enumerate(self.train_threads):
       if i != 0:
         t.join()
   
     # Save
-    if not os.path.exists(flags.checkpoint_dir):
-      os.mkdir(flags.checkpoint_dir)
-  
-    # Write wall time
-    wall_t = time.time() - self.start_time
-    wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
-    with open(wall_t_fname, 'w') as f:
-      f.write(str(wall_t))
-  
-    print('Start saving.')
-    self.saver.save(self.sess,
-                    flags.checkpoint_dir + '/' + 'checkpoint',
-                    global_step = self.global_t)
-    print('End saving.')  
-    
-    self.stop_requested = False
-    self.next_save_steps += flags.save_interval_step
-  
-    # Restart other threads
-    for i in range(flags.parallel_size):
-      if i != 0:
-        thread = threading.Thread(target=self.train_function, args=(i,False))
-        self.train_threads[i] = thread
-        thread.start()
+    try:
+        if not os.path.exists(flags.checkpoint_dir):
+          os.mkdir(flags.checkpoint_dir)
+
+        # Write wall time
+        wall_t = time.time() - self.start_time
+        wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
+        #if not os.path.exists(wall_t_fname):
+        #  os.mkdir(wall_t_fname)
+
+        with open(wall_t_fname, 'w') as f:
+          f.write(str(wall_t))
+
+        print('Start saving.')
+        self.saver.save(self.sess,
+                        flags.checkpoint_dir + '/' + 'checkpoint',
+                        global_step = self.global_t)
+        print('End saving.')
+
+        self.stop_requested = False
+        self.next_save_steps += flags.save_interval_step
+
+        # Restart other threads
+        print("Restarting other threads!")
+        for i in range(flags.parallel_size):
+          if i != 0:
+            thread = threading.Thread(target=self.train_function, args=(i,False))
+            self.train_threads[i] = thread
+            thread.start()
+    except Exception as e:
+        ## Let it be here for debug save() function!!!
+        print(traceback.format_exc(), flush=True)
+        print("Erro in 'save' occured ", flush=True)
     
   def signal_handler(self, signal, frame):
-    print('You pressed Ctrl+C!')
+    print('You pressed Ctrl+C!', flush=True)
     self.terminate_reqested = True
 
 def main(argv):
