@@ -42,7 +42,7 @@ def factorized_res_moduleOLD(x, is_training, dropout=0.3, dilation=1, name="fres
             y = conv(y, num_outputs=n_filters, kernel_size=[1,3], rate=dilation, scope="conv_b_1x3")
             y = dropout_layer(y, rate=dropout)
             y = tf.add(x,y, name="add")
-    print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    #print("DEBUG: {} {}".format(name, y.shape.as_list()))
     return y
 
 
@@ -57,8 +57,8 @@ def factorized_res_module(x, is_training, dropout=0.3, dilation=[1,1], l2=None, 
             y = conv(y, num_outputs=n_filters, kernel_size=[1,3], rate=dilation[1], scope="conv_b_1x3")
             y = dropout_layer(y, rate=dropout)
             y = tf.add(x,y, name="add")
-    print("DEBUG: {} {}".format(name, y.shape.as_list()))
-    print("DEBUG: L2 in factorized res module {}".format(l2))
+    #print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    #print("DEBUG: L2 in factorized res module {}".format(l2))
     return y
 
 
@@ -71,7 +71,7 @@ def downsample(x, n_filters, is_training, bn=False, use_relu=False, l2=None, nam
             branch_a = conv(x, num_outputs=n_filters_conv, kernel_size=3, stride=2, scope="conv")
             branch_b = maxpool(x, kernel_size=2, stride=2, padding='VALID', scope="maxpool")
             y = tf.concat([branch_a, branch_b], axis=-1, name="concat")
-    print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    #print("DEBUG: {} {}".format(name, y.shape.as_list()))
     return y
 
 
@@ -79,7 +79,7 @@ def upsample(x, n_filters, is_training=False, use_relu=False, bn=False, l2=None,
     reg = None if l2 is None else l2_regularizer(l2)
     with arg_scope(get_conv_arg_scope(reg=reg, is_training=is_training, bn=bn, use_deconv=True, use_relu=use_relu)):
         y = deconv(x, num_outputs=n_filters, kernel_size=4, stride=2, scope=name)
-    print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    #print("DEBUG: {} {}".format(name, y.shape.as_list()))
     return y
 
 
@@ -171,7 +171,7 @@ def erfnetB(X, Y, n_classes, alpha=0.001, dropout=0.3, l2=None, is_training=Fals
     """
     Uses L2 regularization.
     """
-    print("DEBUG: L2 passed on to ERFNETB{}".format(l2))
+    #print("DEBUG: L2 passed on to ERFNETB{}".format(l2))
     # TODO: Use TF repeat for some of these repeating layers
     # TODO: register factorized_res_module and upsample and downsample with arg_scope
     #       and pass dropout, is_training, etc to it.

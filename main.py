@@ -4,8 +4,10 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import threading
+from tensorflow.python.client import timeline
 
+
+import threading
 import signal
 import math
 import os
@@ -28,7 +30,7 @@ USE_GPU = True # To use GPU, set True
 
 # get command line args
 flags = get_options("training")
-
+flags.log_dir = os.path.join(flags.checkpoint_dir, flags.log_dir)
 Environment.set_log_dir(flags.log_dir)
 
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -68,17 +70,20 @@ class Application(object):
     
     # set start_time
     trainer.set_start_time(self.start_time)
-    print("Trainer ", parallel_index, " process start!", flush=True)
-  
+    print("Trainer ", parallel_index, " process (re)start!", flush=True)
+
+    prev_print_t = 0
     while True:
-      print("Trainer {0}: {1} {2} {3}".format(parallel_index, self.stop_requested,
-                                              self.terminate_reqested, self.global_t), flush=True)
+      if self.global_t - prev_print_t >= 1000 or not prev_print_t:
+        prev_print_t = self.global_t
+        print("Trainer {0}>>> stop_requested: {1}, terminate_requested: {2}, global_t: {3}".format(parallel_index, self.stop_requested,
+                                                self.terminate_requested, self.global_t), flush=True)
 
       if self.stop_requested:
         print("Trainer ", parallel_index, ": stop requested!", flush=True)
         break
-      if self.terminate_reqested:
-        print("Trainer ", parallel_index, ": terminate_reqested => process stop!", flush=True)
+      if self.terminate_requested:
+        print("Trainer ", parallel_index, ": terminate_requested => process stop!", flush=True)
         trainer.stop()
         break
       if self.global_t > flags.max_time_step:
@@ -95,15 +100,30 @@ class Application(object):
                                         self.summary_writer,
                                         self.summary_op,
                                         self.score_input)
+
         self.global_t += diff_global_t
+
+        # GPU logging memory
+        # prev_runs_t = 0
+        # if self.global_t - prev_runs_t > 1000 or prev_runs_t == 0:
+        #   prev_runs_t = self.global_t
+        #   trainer.many_runs_timeline.save(os.path.join(flags.checkpoint_dir,
+        #                                                'timeline_{}_merged_{}_runs.json'.format(
+        #                                                  parallel_index, self.global_t)))
+        # else:
+        #   trainer.many_runs_timeline.save(os.path.join(flags.checkpoint_dir,
+        #                                                'timeline_{}_merged_{}_runs.json'.format(
+        #                                                  parallel_index, prev_runs_t)))
+        #
+
       except Exception as e:
+        print(traceback.format_exc(), flush=True)
         trainer.stop()
         ## Let it be here!!!
-        print(traceback.format_exc(), flush=True)
         print("Trainer ", parallel_index, " process Error!", flush=True)
         break
 
-    print("Trainer ", parallel_index, " after while stop!", flush=True)
+    print("Trainer ", parallel_index, " after a while return!", flush=True)
 
   def run(self):
     device = "/cpu:0"
@@ -114,7 +134,7 @@ class Application(object):
     env_config = sim_config.get(flags.env_name)
     self.image_shape = [env_config['height'], env_config['width']]
 
-    if flags.segnet:
+    if flags.segnet == -1:
       with open(flags.segnet_config) as f:
         self.config = json.load(f)
 
@@ -142,7 +162,7 @@ class Application(object):
     self.global_t = 0
     
     self.stop_requested = False
-    self.terminate_reqested = False
+    self.terminate_requested = False
     
     action_size = Environment.get_action_size(flags.env_type,
                                               flags.env_name)
@@ -164,7 +184,8 @@ class Application(object):
                                       device,
                                       segnet_param_dict=segnet_param_dict,
                                       image_shape=self.image_shape,
-                                      is_training=is_training)
+                                      is_training=is_training,
+                                      n_classes = flags.n_classes)
     self.trainers = []
     
     learning_rate_input = tf.placeholder("float")
@@ -200,7 +221,8 @@ class Application(object):
                         device,
                         segnet_param_dict=segnet_param_dict,
                         image_shape=self.image_shape,
-                        is_training=is_training)
+                        is_training=is_training,
+                        n_classes = flags.n_classes)
       self.trainers.append(trainer)
     
     # prepare session
@@ -218,7 +240,7 @@ class Application(object):
 
 
     # summary for tensorboard
-    self.score_input = tf.placeholder(tf.int32)
+    self.score_input = tf.placeholder(tf.float32)
     tf.summary.scalar("score", self.score_input)
     
     self.summary_op = tf.summary.merge_all()
@@ -314,7 +336,7 @@ class Application(object):
     
   def signal_handler(self, signal, frame):
     print('You pressed Ctrl+C!', flush=True)
-    self.terminate_reqested = True
+    self.terminate_requested = True
 
 def main(argv):
   app = Application()

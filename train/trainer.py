@@ -5,18 +5,24 @@ from __future__ import print_function
 
 import numpy as np
 import time
+import json
 
 import tensorflow as tf
+from tensorflow.python.client import timeline
 
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
-LOG_INTERVAL = 100
+LOG_INTERVAL = 200
 PERFORMANCE_LOG_INTERVAL = 1000
 
+GPU_LOG = False # Change main.py
 
-run_options = tf.RunOptions(report_tensor_allocations_upon_oom = True)
+if GPU_LOG:
+  run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True, trace_level=tf.RunOptions.FULL_TRACE)
+else:
+  run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True)
 
 class Trainer(object):
   def __init__(self,
@@ -42,7 +48,8 @@ class Trainer(object):
                device,
                segnet_param_dict,
                image_shape,
-               is_training):
+               is_training,
+               n_classes):
 
     self.thread_index = thread_index
     self.learning_rate_input = learning_rate_input
@@ -61,8 +68,14 @@ class Trainer(object):
     self.action_size = Environment.get_action_size(env_type, env_name)
     self.objective_size = Environment.get_objective_size(env_type, env_name)
 
+    self.segnet_param_dict = segnet_param_dict
+
     self.is_training = is_training
-    
+    self.n_classes = n_classes
+
+    self.run_metadata = tf.RunMetadata()
+    self.many_runs_timeline = TimeLiner()
+
     self.local_network = UnrealModel(self.action_size,
                                      self.objective_size,
                                      thread_index,
@@ -73,9 +86,10 @@ class Trainer(object):
                                      pixel_change_lambda,
                                      entropy_beta,
                                      device,
-                                     segnet_param_dict=segnet_param_dict,
+                                     segnet_param_dict=self.segnet_param_dict ,
                                      image_shape=image_shape,
-                                     is_training=is_training)
+                                     is_training=is_training,
+                                     n_classes=n_classes)
 
     self.local_network.prepare_loss()
 
@@ -107,7 +121,7 @@ class Trainer(object):
 
   
   def choose_action(self, pi_values):
-    return np.random.choice(range(len(pi_values)), p=pi_values)
+    return np.random.choice(len(pi_values), p=pi_values)
 
   
   def _record_score(self, sess, summary_writer, summary_op, score_input, score, global_t):
@@ -199,9 +213,9 @@ class Trainer(object):
       values.append(value_)
 
       if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
-        print("Local step {}:".format(self.local_t))
-        print("pi={}".format(pi_))
-        print("V={}".format(value_), flush=True)
+        print("Thread {}>>> Local step {}:".format(self.thread_index, self.local_t))
+        print("Thread {}>>> pi={}".format(self.thread_index, pi_))
+        print("Thread {}>>> V={}".format(self.thread_index, value_), flush=True)
 
       prev_state = self.environment.last_state
 
@@ -224,7 +238,7 @@ class Trainer(object):
 
       if terminal:
         terminal_end = True
-        print("score={}".format(self.episode_reward), flush=True)
+        print("Thread {}>>> score={}".format(self.thread_index, self.episode_reward))#, flush=True)
 
         self._record_score(sess, summary_writer, summary_op, score_input,
                            self.episode_reward, global_t)
@@ -247,6 +261,7 @@ class Trainer(object):
     batch_a = []
     batch_adv = []
     batch_R = []
+    batch_sobjT = []
 
     for(ai, ri, si, Vi) in zip(actions, rewards, states, values):
       R = ri + self.gamma * R
@@ -258,15 +273,20 @@ class Trainer(object):
       batch_a.append(a)
       batch_adv.append(adv)
       batch_R.append(R)
+      if self.segnet_param_dict["segnet_mode"] >= 2:
+        batch_sobjT.append(si['objectType'])
 
     batch_si.reverse()
     batch_a.reverse()
     batch_adv.reverse()
     batch_R.reverse()
+    batch_sobjT.reverse()
+
+    #print(np.unique(batch_sobjT))
 
     ## HERE Mathematical Error A3C: only last values should be used for base/ or aggregate with last made
 
-    return [batch_si[0]], [last_action_rewards[0]], [batch_a[0]], [batch_adv[0]], [batch_R[0]], start_lstm_state
+    return batch_si, batch_sobjT, last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state
 
   
   def _process_pc(self, sess):
@@ -359,7 +379,7 @@ class Trainer(object):
     # one hot vector for target reward
     r = rp_experience_frames[3].reward
     rp_c = [0.0, 0.0, 0.0]
-    if r == 0:
+    if -1e-10 < r < 1e-10:
       rp_c[0] = 1.0 # zero
     elif r > 0:
       rp_c[1] = 1.0 # positive
@@ -381,15 +401,15 @@ class Trainer(object):
 
     cur_learning_rate = self._anneal_learning_rate(global_t)
 
-    print("Weights copying!", flush=True)
+    #print("Weights copying!", flush=True)
     # Copy weights from shared to local
     sess.run( self.sync )
     #print("Weights copied successfully!", flush=True)
 
 
     # [Base]
-    print("[Base]", flush=True)
-    batch_si, batch_last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state = \
+    #print("[Base]", flush=True)
+    batch_si, batch_sobjT, batch_last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state,  = \
           self._process_base(sess,
                              global_t,
                              summary_writer,
@@ -408,7 +428,10 @@ class Trainer(object):
     if self.use_lstm:
       feed_dict[self.local_network.base_initial_lstm_state] = start_lstm_state
 
-    print("[Pixel change]", flush=True)
+    if self.segnet_param_dict["segnet_mode"] >= 2:
+      feed_dict[self.local_network.base_segm_mask] = batch_sobjT
+
+    #print("[Pixel change]", flush=True)
     # [Pixel change]
     if self.use_pixel_change:
       batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R = self._process_pc(sess)
@@ -421,7 +444,7 @@ class Trainer(object):
       }
       feed_dict.update(pc_feed_dict)
 
-    print("[Value replay]", flush=True)
+    #print("[Value replay]", flush=True)
     # [Value replay]
     if self.use_value_replay:
       batch_vr_si, batch_vr_last_action_reward, batch_vr_R = self._process_vr(sess)
@@ -434,7 +457,7 @@ class Trainer(object):
       feed_dict.update(vr_feed_dict)
 
     # [Reward prediction]
-    print("[Reward prediction]", flush=True)
+    #print("[Reward prediction]", flush=True)
     if self.use_reward_prediction:
       batch_rp_si, batch_rp_c = self._process_rp()
       rp_feed_dict = {
@@ -445,12 +468,43 @@ class Trainer(object):
       feed_dict.update({self.is_training: True})
 
 
-    print("Applying gradients in train!", flush=True)
+    #print("Applying gradients in train!", flush=True)
     # Calculate gradients and copy them to global network.
-    sess.run( self.apply_gradients, feed_dict=feed_dict, options=run_options)
+    if GPU_LOG:
+      sess.run( self.apply_gradients, feed_dict=feed_dict, options=run_options, run_metadata=self.run_metadata)
+    else:
+      sess.run(self.apply_gradients, feed_dict=feed_dict, options=run_options)
+
+    fetched_timeline = timeline.Timeline(self.run_metadata.step_stats)
+    chrome_trace = fetched_timeline.generate_chrome_trace_format()
+    self.many_runs_timeline.update_timeline(chrome_trace)
     
     self._print_log(global_t)
     
     # Return advanced local step size
     diff_local_t = self.local_t - start_local_t
     return diff_local_t
+
+
+  ### TimeLiner class
+
+class TimeLiner:
+  _timeline_dict = None
+
+  def update_timeline(self, chrome_trace):
+    # convert crome trace to python dict
+    chrome_trace_dict = json.loads(chrome_trace)
+    # for first run store full trace
+    if self._timeline_dict is None:
+      self._timeline_dict = chrome_trace_dict
+    # for other - update only time consumption, not definitions
+    else:
+      for event in chrome_trace_dict['traceEvents']:
+        # events time consumption started with 'ts' prefix
+        if 'ts' in event:
+          self._timeline_dict['traceEvents'].append(event)
+
+  def save(self, f_name):
+    with open(f_name, 'w') as f:
+      json.dump(self._timeline_dict, f)
+

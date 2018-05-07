@@ -45,6 +45,7 @@ class UnrealModel(object):
                segnet_param_dict,
                image_shape,
                is_training,
+               n_classes,
                for_display=False):
     self._device = device
     self._action_size = action_size
@@ -68,9 +69,14 @@ class UnrealModel(object):
 
     self.is_training = is_training
 
+    self.n_classes = n_classes
     self.l2 = 2e-4
+    self.class_weights = [25.55382055,  2.02904385,  4.22482301, 14.68550062, 26.92127905, 21.18040629,
+                          28.08939361, 46.68124414, 46.96535273]
+    self.class_names =  np.array(['void', 'wall_ceiling_floor_window', 'otherprop', 'arch_door', 'chair', 'sofa',
+                                  'bed', 'bathtub', 'toilet'])
 
-    print("Network start creation in tread {}!".format(self._thread_index), flush=True)
+    print("Network start creation in thread {}!".format(self._thread_index), flush=True)
 
     self._create_network(for_display)
 
@@ -110,102 +116,118 @@ class UnrealModel(object):
     self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
     # Conv layers
-    base_conv_output = self.encoder(self.base_input, for_display)
+    base_enc_output = self.encoder(self.base_input, for_display)
     
     if self._use_lstm:
       # LSTM layer
-      self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0')
-      self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state1')
+      self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_0')
+      self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_1')
 
       self.base_initial_lstm_state = tf.contrib.rnn.LSTMStateTuple(self.base_initial_lstm_state0,
                                                                    self.base_initial_lstm_state1)
 
       self.base_lstm_outputs, self.base_lstm_state = \
-        self._base_lstm_layer(base_conv_output,
+        self._base_lstm_layer(base_enc_output,
                               self.base_last_action_reward_input,
                               self.base_initial_lstm_state)
 
       self.base_pi = self._base_policy_layer(self.base_lstm_outputs) # policy output
       self.base_v  = self._base_value_layer(self.base_lstm_outputs)  # value output
     else:
-      self.base_fcn_outputs = self._base_fcn_layer(base_conv_output,
+      self.base_fcn_outputs = self._base_fcn_layer(base_enc_output,
                                                    self.base_last_action_reward_input)
       self.base_pi = self._base_policy_layer(self.base_fcn_outputs) # policy output
       self.base_v  = self._base_value_layer(self.base_fcn_outputs)  # value output
 
-    
+    if self.segnet_mode == 2:
+      self.base_dec_output = self.decoder(base_enc_output, for_display)
+      with tf.name_scope("preds") as scope:
+        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name=scope)
+        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+    elif self.segnet_mode == 3:
+      encoder_shape = base_encoder.get_shape().as_list()
+      num_outputs = np.prod(encoder_shape)
+      #input_size = lstm_outputs.get_shape().as_list()
+      #lstm_outputs = np.reshape(self.base_lstm_outputs, (1, -1, 256))
+      base_fc_from_lstm = tf.reshape(fc(lstm_outputs, num_outputs, scope="fc_lstm-decoder"), encoder_shape)
+      self.base_dec_output = self.decoder(base_fc_from_lstm, for_display, scope="from_fc_lstm")
+      with tf.name_scope("preds") as scope:
+        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name=scope)
+        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+
+
   def encoder(self, state_input, reuse=False, for_display=False):
-    with tf.variable_scope("base_conv", reuse=reuse) as scope:
-      if self.segnet_mode  == 1:
-        #self.is_training = tf.placeholder_with_default(True, shape=[], name="is_training_pl")
-        #self.with_dropout_pl = tf.placeholder(tf.bool, name="with_dropout")
-        #??self.keep_prob_pl = tf.placeholder(tf.float32, shape=None, name="keep_rate")
-        #self.labels_pl = tf.placeholder(tf.int64, [None, self.input_h, self.input_w, 1])
-
-        # Before enter the images into the architecture, we need to do Local Contrast Normalization
-        # But it seems a bit complicated, so we use Local Response Normalization which implement in Tensorflow
-        # Reference page:https://www.tensorflow.org/api_docs/python/tf/nn/local_response_normalization
-        self.norm1 = tf.nn.lrn(state_input, depth_radius=5, bias=1.0, alpha=0.0001, beta=0.75, name='norm1')
-        # first box of convolution layer,each part we do convolution two times, so we have conv1_1, and conv1_2
-        self.conv1_1 = conv_layer(self.norm1, "conv1_1", [3, 3, 3, 64], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv1_2 = conv_layer(self.conv1_1, "conv1_2", [3, 3, 64, 64], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.pool1, self.pool1_index, self.shape_1 = max_pool(self.conv1_2, 'pool1')
-
-        # Second box of convolution layer(4)
-        self.conv2_1 = conv_layer(self.pool1, "conv2_1", [3, 3, 64, 128], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv2_2 = conv_layer(self.conv2_1, "conv2_2", [3, 3, 128, 128], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.pool2, self.pool2_index, self.shape_2 = max_pool(self.conv2_2, 'pool2')
-
-        # Third box of convolution layer(7)
-        self.conv3_1 = conv_layer(self.pool2, "conv3_1", [3, 3, 128, 256], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv3_2 = conv_layer(self.conv3_1, "conv3_2", [3, 3, 256, 256], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv3_3 = conv_layer(self.conv3_2, "conv3_3", [3, 3, 256, 256], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.pool3, self.pool3_index, self.shape_3 = max_pool(self.conv3_3, 'pool3')
-
-        # Fourth box of convolution layer(10)
-        if self.bayes:
-          self.dropout1 = tf.layers.dropout(self.pool3, rate=(1 - self.keep_prob_pl),
-                                            training=self.with_dropout_pl, name="dropout1")
-          self.conv4_1 = conv_layer(self.dropout1, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
-                                    self.vgg_param_dict)
-        else:
-          self.conv4_1 = conv_layer(self.pool3, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
-                                    self.vgg_param_dict)
-        self.conv4_2 = conv_layer(self.conv4_1, "conv4_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv4_3 = conv_layer(self.conv4_2, "conv4_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.pool4, self.pool4_index, self.shape_4 = max_pool(self.conv4_3, 'pool4')
-
-        # Fifth box of convolution layers(13)
-        if self.bayes:
-          self.dropout2 = tf.layers.dropout(self.pool4, rate=(1 - self.keep_prob_pl),
-                                            training=self.with_dropout_pl, name="dropout2")
-          self.conv5_1 = conv_layer(self.dropout2, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                    self.vgg_param_dict)
-        else:
-          self.conv5_1 = conv_layer(self.pool4, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                    self.vgg_param_dict)
-        self.conv5_2 = conv_layer(self.conv5_1, "conv5_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.conv5_3 = conv_layer(self.conv5_2, "conv5_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
-                                  self.vgg_param_dict)
-        self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
-
-        return self.pool5
-      elif self.segnet_mode == 2:
-
+    with tf.variable_scope("base_encoder", reuse=reuse) as scope:
+      if self.segnet_mode  == -1:
+        raise Exception("No SegNet encoder, use self.segnet_mode > 0")
+        # #self.is_training = tf.placeholder_with_default(True, shape=[], name="is_training_pl")
+        # #self.with_dropout_pl = tf.placeholder(tf.bool, name="with_dropout")
+        # #??self.keep_prob_pl = tf.placeholder(tf.float32, shape=None, name="keep_rate")
+        # #self.labels_pl = tf.placeholder(tf.int64, [None, self.input_h, self.input_w, 1])
+        #
+        # # Before enter the images into the architecture, we need to do Local Contrast Normalization
+        # # But it seems a bit complicated, so we use Local Response Normalization which implement in Tensorflow
+        # # Reference page:https://www.tensorflow.org/api_docs/python/tf/nn/local_response_normalization
+        # self.norm1 = tf.nn.lrn(state_input, depth_radius=5, bias=1.0, alpha=0.0001, beta=0.75, name='norm1')
+        # # first box of convolution layer,each part we do convolution two times, so we have conv1_1, and conv1_2
+        # self.conv1_1 = conv_layer(self.norm1, "conv1_1", [3, 3, 3, 64], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv1_2 = conv_layer(self.conv1_1, "conv1_2", [3, 3, 64, 64], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.pool1, self.pool1_index, self.shape_1 = max_pool(self.conv1_2, 'pool1')
+        #
+        # # Second box of convolution layer(4)
+        # self.conv2_1 = conv_layer(self.pool1, "conv2_1", [3, 3, 64, 128], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv2_2 = conv_layer(self.conv2_1, "conv2_2", [3, 3, 128, 128], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.pool2, self.pool2_index, self.shape_2 = max_pool(self.conv2_2, 'pool2')
+        #
+        # # Third box of convolution layer(7)
+        # self.conv3_1 = conv_layer(self.pool2, "conv3_1", [3, 3, 128, 256], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv3_2 = conv_layer(self.conv3_1, "conv3_2", [3, 3, 256, 256], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv3_3 = conv_layer(self.conv3_2, "conv3_3", [3, 3, 256, 256], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.pool3, self.pool3_index, self.shape_3 = max_pool(self.conv3_3, 'pool3')
+        #
+        # # Fourth box of convolution layer(10)
+        # if self.bayes:
+        #   self.dropout1 = tf.layers.dropout(self.pool3, rate=(1 - self.keep_prob_pl),
+        #                                     training=self.with_dropout_pl, name="dropout1")
+        #   self.conv4_1 = conv_layer(self.dropout1, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
+        #                             self.vgg_param_dict)
+        # else:
+        #   self.conv4_1 = conv_layer(self.pool3, "conv4_1", [3, 3, 256, 512], self.is_training, self.use_vgg,
+        #                             self.vgg_param_dict)
+        # self.conv4_2 = conv_layer(self.conv4_1, "conv4_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv4_3 = conv_layer(self.conv4_2, "conv4_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.pool4, self.pool4_index, self.shape_4 = max_pool(self.conv4_3, 'pool4')
+        #
+        # # Fifth box of convolution layers(13)
+        # if self.bayes:
+        #   self.dropout2 = tf.layers.dropout(self.pool4, rate=(1 - self.keep_prob_pl),
+        #                                     training=self.with_dropout_pl, name="dropout2")
+        #   self.conv5_1 = conv_layer(self.dropout2, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                             self.vgg_param_dict)
+        # else:
+        #   self.conv5_1 = conv_layer(self.pool4, "conv5_1", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                             self.vgg_param_dict)
+        # self.conv5_2 = conv_layer(self.conv5_1, "conv5_2", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.conv5_3 = conv_layer(self.conv5_2, "conv5_3", [3, 3, 512, 512], self.is_training, self.use_vgg,
+        #                           self.vgg_param_dict)
+        # self.pool5, self.pool5_index, self.shape_5 = max_pool(self.conv5_3, 'pool5')
+        #
+        # return self.pool5
+      elif self.segnet_mode > 0:
         #n_classes = self.n_classes, alpha = self.alpha, dropout = self.dropout, l2 = self.l2_scale, is_training = self.is_training
-        with tf.name_scope("preprocess") as scope:
-          x = tf.div(state_input, 255., name="rescaled_inputs")
-
+        #with tf.name_scope("preprocess") as scope:
+        #  x = tf.div(state_input, 255., name="rescaled_inputs")
+        x = state_input
         x = downsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="d1")
 
         x = downsample(x, n_filters=64, is_training=self.is_training, l2=self.l2, name="d2")
@@ -236,6 +258,19 @@ class UnrealModel(object):
         h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2 => 9x9x32
         return h_conv2
 
+
+  def decoder(self, layer_input, reuse=False, for_display=False, scope=""):
+    with tf.variable_scope("base_decoder" + scope, reuse=reuse) as scope:
+      x = upsample(layer_input, n_filters=64, is_training=self.is_training, l2=self.l2, name="up17")
+      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres18")
+      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres19")
+
+      x = upsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="up20")
+      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres21")
+      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres22")
+
+      x = upsample(x, n_filters=self.n_classes, is_training=self.is_training, l2=self.l2, name="up23")
+      return x
 
   def _base_fcn_layer(self, conv_output, last_action_reward_objective_input,
                       reuse=False):
@@ -444,8 +479,33 @@ class UnrealModel(object):
     # Value loss (output)
     # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
     value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
-    
+
     base_loss = policy_loss + value_loss
+    
+    if self.segnet_mode >= 2:
+      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
+
+      unrolled_logits = tf.reshape(self.base_dec_output, (-1, self.n_classes))
+      unrolled_labels = tf.reshape(self.base_segm_mask, (-1,))
+
+      # HANDLE CLASS WEIGHTS
+      if self.class_weights is not None:
+        class_weights_tensor = tf.constant(self.class_weights, dtype=tf.float32)
+        label_weights = tf.gather(class_weights_tensor, indices=unrolled_labels)
+        print("- Using Class Weights: \n", self.class_weights)
+      else:
+        label_weights = 1.0
+        print("- Using uniform Class Weights of 1.0")
+
+      # CACLULATE LOSSES
+      tf.losses.sparse_softmax_cross_entropy(labels=unrolled_labels, logits=unrolled_logits, weights=label_weights,
+                                             reduction="weighted_sum_by_nonzero_weights")
+
+      # SUMS ALL LOSSES - even Regularization losses automatically
+      decoder_loss = tf.losses.get_total_loss()
+
+      base_loss += decoder_loss
+
     return base_loss
 
   

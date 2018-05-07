@@ -6,6 +6,7 @@ from __future__ import print_function
 import numpy as np
 
 from datetime import datetime
+import os
 
 class Environment(object):
   # cached action size
@@ -22,6 +23,7 @@ class Environment(object):
 
   @staticmethod
   def set_log_dir(dir):
+
     Environment.LOG_DIR = dir
 
   @staticmethod

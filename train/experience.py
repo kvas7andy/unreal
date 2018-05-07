@@ -50,14 +50,14 @@ class Experience(object):
     self._history_size = history_size
     self._frames = deque(maxlen=history_size)
     # frame indices for zero rewards
-    self._zero_reward_indices = deque()
+    self._pos_reward_indices = deque()
     # frame indices for non zero rewards
-    self._non_zero_reward_indices = deque()
+    self._neg_reward_indices = deque()
     self._top_frame_index = 0
 
   def get_debug_string(self):
     return "{} frames, {} zero rewards, {} non zero rewards".format(
-      len(self._frames), len(self._zero_reward_indices), len(self._non_zero_reward_indices))
+      len(self._frames), len(self._pos_reward_indices), len(self._neg_reward_indices))
 
   def add_frame(self, frame):
     if frame.terminal and len(self._frames) > 0 and self._frames[-1].terminal:
@@ -73,23 +73,23 @@ class Experience(object):
 
     # append index
     if frame_index >= 3:
-      if frame.reward == 0:
-        self._zero_reward_indices.append(frame_index)
+      if frame.reward > 0:
+        self._pos_reward_indices.append(frame_index)
       else:
-        self._non_zero_reward_indices.append(frame_index)
+        self._neg_reward_indices.append(frame_index)
     
     if was_full:
       self._top_frame_index += 1
 
       cut_frame_index = self._top_frame_index + 3
       # Cut frame if its index is lower than cut_frame_index.
-      if len(self._zero_reward_indices) > 0 and \
-         self._zero_reward_indices[0] < cut_frame_index:
-        self._zero_reward_indices.popleft()
+      if len(self._pos_reward_indices) > 0 and \
+         self._pos_reward_indices[0] < cut_frame_index:
+        self._pos_reward_indices.popleft()
         
-      if len(self._non_zero_reward_indices) > 0 and \
-         self._non_zero_reward_indices[0] < cut_frame_index:
-        self._non_zero_reward_indices.popleft()
+      if len(self._neg_reward_indices) > 0 and \
+         self._neg_reward_indices[0] < cut_frame_index:
+        self._neg_reward_indices.popleft()
 
 
   def is_full(self):
@@ -122,23 +122,23 @@ class Experience(object):
     Sample 4 successive frames for reward prediction.
     """
     if np.random.randint(2) == 0:
-      from_zero = True
+      from_neg = True
     else:
-      from_zero = False
+      from_neg = False
     
-    if len(self._zero_reward_indices) == 0:
-      # zero rewards container was empty
-      from_zero = False
-    elif len(self._non_zero_reward_indices) == 0:
-      # non zero rewards container was empty
-      from_zero = True
+    if len(self._pos_reward_indices) == 0:
+      # pos rewards container was empty
+      from_neg = True
+    elif len(self._neg_reward_indices) == 0:
+      # neg rewards container was empty
+      from_neg = False
 
-    if from_zero:
-      index = np.random.randint(len(self._zero_reward_indices))
-      end_frame_index = self._zero_reward_indices[index]
+    if from_neg:
+      index = np.random.randint(len(self._neg_reward_indices))
+      end_frame_index = self._neg_reward_indices[index]
     else:
-      index = np.random.randint(len(self._non_zero_reward_indices))
-      end_frame_index = self._non_zero_reward_indices[index]
+      index = np.random.randint(len(self._pos_reward_indices))
+      end_frame_index = self._pos_reward_indices[index]
 
     start_frame_index = end_frame_index-3
     raw_start_frame_index = start_frame_index - self._top_frame_index

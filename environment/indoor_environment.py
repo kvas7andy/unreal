@@ -35,6 +35,10 @@ class IndoorEnvironment(environment.Environment):
     self.last_action = 0
     self.last_reward = 0
 
+    self.prev_state = None
+    self.prev_action = 0
+    self.prev_reward = 0
+
     simargs = sim_config.get(env_name)
     simargs['id'] = 'sim%02d' % thread_index
     simargs['logdir'] = os.path.join(IndoorEnvironment.get_log_dir(), simargs['id'])
@@ -43,32 +47,49 @@ class IndoorEnvironment(environment.Environment):
     if env_args is not None:
       simargs.update(env_args)
 
+    # try:
     self._sim = RoomSimulator(simargs)
     self._sim_obs_space = self._sim.get_observation_space(simargs['outputs'])
     self.reset()
+    # except Exception as e:
+    #   print("Error:", str(e), flush=True)
+    #   raise Exception
+
 
   def reset(self):
     result = self._sim.reset()
     
     self._episode_info = result.get('episode_info')
     self._last_full_state = result.get('observation')
-    obs = self._last_full_state['observation']['sensors']['color']['data']
-    objective = self._last_full_state.get('measurements')
-    state = { 'image': self._preprocess_frame(obs), 'objective': objective }
+    img = self._last_full_state['observation']['sensors']['color']['data']
+    object_type = self._last_full_state["observation"]["sensors"]["objectType"]["data"][:, :, 2]
+    #print(object_type.shape)
+    objective = self._last_full_state.get('measurements') # with measure function!
+    state = { 'image': self._preprocess_frame(img),
+              'objectType': self._preprocess_frame(object_type, "segm"),
+              'objective': objective }
     self.last_state = state
     self.last_action = 0
     self.last_reward = 0
+
+    self.prev_state = None
+    self.prev_action = 0
+    self.prev_reward = 0
 
   def stop(self):
     if self._sim is not None:
         self._sim.close_game()
 
-  def _preprocess_frame(self, image):
-    if len(image.shape) == 2:  # assume gray
-        image = np.dstack([image, image, image])
+  def _preprocess_frame(self, image, mode="segm"):
+    if len(image.shape) == 2:  # assume object_type or depth
+      image = image.reshape((image.shape[1], image.shape[0]))
+      if "segm" in mode:
+        return image.astype(np.int32)
+      #image = np.dstack([image, image, image])
     else:  # assume rgba
-        image = image[:, :, :-1]
+      image = image[:, :, :-1]
     image = image.reshape((image.shape[1], image.shape[0], image.shape[2]))
+    #print(image.shape)
     #Reshape is essential, when non-square image from simulator!
     image = image.astype(np.float32)
     image = image / 255.0
@@ -81,16 +102,24 @@ class IndoorEnvironment(environment.Environment):
     #print("Step made")
     self._last_full_state = full_state  # Last observed state
     obs = full_state['observation']['sensors']['color']['data']
+    object_type = full_state["observation"]["sensors"]["objectType"]["data"][:, :, 2]
     reward = full_state['rewards']
     terminal = full_state['terminals']
     objective = full_state.get('measurements')
 
     if not terminal:
-      state = { 'image': self._preprocess_frame(obs), 'objective': objective }
+      state = { 'image': self._preprocess_frame(obs),
+                'objectType': self._preprocess_frame(object_type, "segm"),
+                'objective': objective }
     else:
       state = self.last_state
 
     pixel_change = self._calc_pixel_change(state['image'], self.last_state['image'])
+
+    self.prev_state = self.last_state
+    self.prev_action = self.last_action
+    self.prev_reward = self.last_reward
+
     self.last_state = state
     self.last_action = action
     self.last_reward = reward
