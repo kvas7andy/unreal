@@ -46,7 +46,7 @@ class ExperienceFrame(object):
       return action_reward
 
 class Experience(object):
-  def __init__(self, history_size):
+  def __init__(self, history_size, random_state):
     self._history_size = history_size
     self._frames = deque(maxlen=history_size)
     # frame indices for zero rewards
@@ -54,6 +54,7 @@ class Experience(object):
     # frame indices for non zero rewards
     self._neg_reward_indices = deque()
     self._top_frame_index = 0
+    self.random_state = random_state
 
   def get_debug_string(self):
     return "{} frames, {} zero rewards, {} non zero rewards".format(
@@ -99,7 +100,7 @@ class Experience(object):
   def sample_sequence(self, sequence_size):
     # -1 for the case if start pos is the terminated frame.
     # (Then +1 not to start from terminated frame.)
-    start_pos = np.random.randint(0, self._history_size - sequence_size -1)
+    start_pos = self.random_state.randint(0, self._history_size - sequence_size -1)
 
     if self._frames[start_pos].terminal:
       start_pos += 1
@@ -121,7 +122,7 @@ class Experience(object):
     """
     Sample 4 successive frames for reward prediction.
     """
-    if np.random.randint(2) == 0:
+    if self.random_state.randint(2) == 0:
       from_neg = True
     else:
       from_neg = False
@@ -134,10 +135,10 @@ class Experience(object):
       from_neg = False
 
     if from_neg:
-      index = np.random.randint(len(self._neg_reward_indices))
+      index = self.random_state.randint(len(self._neg_reward_indices))
       end_frame_index = self._neg_reward_indices[index]
     else:
-      index = np.random.randint(len(self._pos_reward_indices))
+      index = self.random_state.randint(len(self._pos_reward_indices))
       end_frame_index = self._pos_reward_indices[index]
 
     start_frame_index = end_frame_index-3

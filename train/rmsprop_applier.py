@@ -92,7 +92,7 @@ class RMSPropApplier(object):
       grad,
       use_locking=False).op
 
-  def minimize_local(self, loss, global_var_list, local_var_list):
+  def minimize_local(self, loss, global_var_list, local_var_list, thread_index):
     """
     minimize loss and apply gradients to global vars.
     """
@@ -103,21 +103,30 @@ class RMSPropApplier(object):
         gate_gradients=False,
         aggregation_method=None,
         colocate_gradients_with_ops=False)
-      return self._apply_gradients(global_var_list, local_gradients)
+      return self._apply_gradients(global_var_list, local_gradients, thread_index=thread_index)
 
   # Apply gradients to var.
-  def _apply_gradients(self, global_var_list, local_grad_list, name=None):
+  def _apply_gradients(self, global_var_list, local_grad_list, name=None, thread_index=None):
     update_ops = []
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope="net_{0}".format(thread_index))
+    print("Trainer {}>> update_ops: {}".format(thread_index, len(update_ops)))
 
-    with tf.control_dependencies(None):
-      self._create_slots(global_var_list)
+    try:
+      print("Slots: rmsprop create", flush=True)
+      with tf.control_dependencies(None):
+        self._create_slots(global_var_list)
+      print("Slots: rmsprop created", flush=True)
 
-    # global gradient norm clipping
-    local_grad_list, _ =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
+      # global gradient norm clipping
+      local_grad_list, _ =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
 
-    with tf.name_scope(name, self._name,[]) as name:
-      self._prepare()
-      for var, grad in zip(global_var_list, local_grad_list):
-        with tf.name_scope("update_" + var.op.name), tf.device(var.device):
-          update_ops.append(self._apply_dense(grad, var))
-      return tf.group(*update_ops, name=name)
+      with tf.control_dependencies(update_ops):
+        with tf.name_scope(name, self._name, []) as name:
+          self._prepare()
+          for var, grad in zip(global_var_list, local_grad_list):
+            with tf.name_scope("update_" + var.op.name), tf.device(var.device):
+              update_ops.append(self._apply_dense(grad, var))
+          return tf.group(*update_ops, name=name)
+    except Exception as e:
+      print("Erro: ", str(e), flush=True)
+      raise Exception

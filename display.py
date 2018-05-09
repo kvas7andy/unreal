@@ -258,7 +258,7 @@ class Display(object):
                                                                   last_reward, self.environment.last_state)
     
     if not flags.use_pixel_change:
-      pi_values, v_value = self.global_network.run_base_policy_and_value(sess,
+      pi_values, v_value, _ = self.global_network.run_base_policy_and_value(sess,
                                                                          self.environment.last_state,
                                                                          last_action_reward)
     else:

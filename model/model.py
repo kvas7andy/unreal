@@ -82,9 +82,9 @@ class UnrealModel(object):
 
   def _create_network(self, for_display):
     scope_name = "net_{0}".format(self._thread_index)
-    with tf.device(self._device), tf.variable_scope(scope_name) as scope:
+    with tf.device(self._device), tf.variable_scope(scope_name):
       # lstm
-      self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
+      self.lstm_cell = contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
       
       # [base A3C network]
       self._create_base_network(for_display)
@@ -102,10 +102,14 @@ class UnrealModel(object):
       # [Reward prediction network]
       if self._use_reward_prediction:
         self._create_rp_network()
+
+      if for_display and self.segnet_mode >= 2:
+        self._create_evaluation_metric_ops()
       
       self.reset_state()
 
       self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope_name)
+      self.global_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope_name)
 
 
   def _create_base_network(self, for_display=False):
@@ -116,7 +120,7 @@ class UnrealModel(object):
     self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
     # Conv layers
-    base_enc_output = self.encoder(self.base_input, for_display)
+    base_enc_output = self.encoder(self.base_input)
     
     if self._use_lstm:
       # LSTM layer
@@ -140,23 +144,27 @@ class UnrealModel(object):
       self.base_v  = self._base_value_layer(self.base_fcn_outputs)  # value output
 
     if self.segnet_mode == 2:
-      self.base_dec_output = self.decoder(base_enc_output, for_display)
-      with tf.name_scope("preds") as scope:
-        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name=scope)
-        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
-    elif self.segnet_mode == 3:
-      encoder_shape = base_encoder.get_shape().as_list()
+      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
+
+      self.base_dec_output = self.decoder(base_enc_output)
+      self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
+      self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+
+    elif self.segnet_mode == 3 and self._use_lstm:
+      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
+
+      encoder_shape = base_enc_output.get_shape().as_list()
       num_outputs = np.prod(encoder_shape)
       #input_size = lstm_outputs.get_shape().as_list()
       #lstm_outputs = np.reshape(self.base_lstm_outputs, (1, -1, 256))
-      base_fc_from_lstm = tf.reshape(fc(lstm_outputs, num_outputs, scope="fc_lstm-decoder"), encoder_shape)
-      self.base_dec_output = self.decoder(base_fc_from_lstm, for_display, scope="from_fc_lstm")
-      with tf.name_scope("preds") as scope:
-        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name=scope)
-        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+      base_fc_from_lstm = tf.reshape(fc(self.base_lstm_outputs, num_outputs, scope="fc_lstm-decoder"), encoder_shape)
+      self.base_dec_output = self.decoder(base_fc_from_lstm, scope="from_fc_lstm")
+
+      self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
+      self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
 
 
-  def encoder(self, state_input, reuse=False, for_display=False):
+  def encoder(self, state_input, reuse=False):
     with tf.variable_scope("base_encoder", reuse=reuse) as scope:
       if self.segnet_mode  == -1:
         raise Exception("No SegNet encoder, use self.segnet_mode > 0")
@@ -483,8 +491,6 @@ class UnrealModel(object):
     base_loss = policy_loss + value_loss
     
     if self.segnet_mode >= 2:
-      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
-
       unrolled_logits = tf.reshape(self.base_dec_output, (-1, self.n_classes))
       unrolled_labels = tf.reshape(self.base_segm_mask, (-1,))
 
@@ -498,13 +504,12 @@ class UnrealModel(object):
         print("- Using uniform Class Weights of 1.0")
 
       # CACLULATE LOSSES
-      tf.losses.sparse_softmax_cross_entropy(labels=unrolled_labels, logits=unrolled_logits, weights=label_weights,
-                                             reduction="weighted_sum_by_nonzero_weights")
-
+      self.decoder_loss = tf.losses.sparse_softmax_cross_entropy(labels=unrolled_labels, logits=unrolled_logits, weights=label_weights,
+                                           reduction="weighted_sum_by_nonzero_weights", scope="decoder_loss")
+      self.decoder_loss += tf.losses.get_regularization_loss(scope="net_{0}".format(self._thread_index))
       # SUMS ALL LOSSES - even Regularization losses automatically
-      decoder_loss = tf.losses.get_total_loss()
 
-      base_loss += decoder_loss
+      base_loss += self.decoder_loss
 
     return base_loss
 
@@ -546,59 +551,88 @@ class UnrealModel(object):
     
     
   def prepare_loss(self):
-    with tf.device(self._device):
-      loss = self._base_loss()
-      
+    scope_name = "net_{0}".format(self._thread_index)
+    with tf.device(self._device), tf.variable_scope(scope_name):
+      self.base_loss = self._base_loss()
+      loss = self.base_loss
+
       if self._use_pixel_change:
-        pc_loss = self._pc_loss()
-        loss = loss + pc_loss
+        self.pc_loss = self._pc_loss()
+        loss = loss + self.pc_loss
 
       if self._use_value_replay:
-        vr_loss = self._vr_loss()
-        loss = loss + vr_loss
+        self.vr_loss = self._vr_loss()
+        loss = loss + self.vr_loss
 
       if self._use_reward_prediction:
-        rp_loss = self._rp_loss()
-        loss = loss + rp_loss
+        self.rp_loss = self._rp_loss()
+        loss = loss + self.rp_loss
       
       self.total_loss = loss
 
+  def _create_evaluation_metric_ops(self):
+    # EVALUATION METRIC - IoU
+    with tf.name_scope("evaluation") as scope:
+      # Define the evaluation metric and update operations
+      self.evaluation, self.update_evaluation_vars = tf.metrics.mean_iou(
+        tf.reshape(self.base_segm_mask, [-1]),
+        tf.reshape(self.preds, [-1]),
+        num_classes=self.n_classes,
+        name=scope)
+      # Isolate metric's running variables & create their initializer/reset op
+      evaluation_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=scope)
+      self.reset_evaluation_vars = tf.variables_initializer(var_list=evaluation_vars)
 
   def reset_state(self):
     if self._use_lstm:
-      self.base_lstm_state_out = tf.contrib.rnn.LSTMStateTuple(np.zeros([1, 256]),
-                                                               np.zeros([1, 256]))
+      self.base_lstm_state_out = contrib.rnn.LSTMStateTuple(np.zeros([1, 256]),
+                                                            np.zeros([1, 256]))
 
-  def run_base_policy_and_value(self, sess, s_t, last_action_reward):
+  def run_base_policy_and_value(self, sess, s_t, last_action_reward, mode=""):
     # This run_base_policy_and_value() is used when forward propagating.
     # so the step size is 1.
     if self._use_lstm:
-      pi_out, v_out, self.base_lstm_state_out = sess.run( [self.base_pi, self.base_v, self.base_lstm_state],
-                                                          feed_dict = {self.base_input : [s_t['image']],
+      if "segnet" in mode:
+        pi_out, v_out, self.base_lstm_state_out = sess.run([self.base_pi, self.base_v, self.base_lstm_state],
+                                                           feed_dict={self.base_input: [s_t['image']],
+                                                                      self.is_training: not self.for_display,
+                                                                      self.base_last_action_reward_input: [last_action_reward],
+                                                                      self.base_initial_lstm_state0: self.base_lstm_state_out[0],
+                                                                      self.base_initial_lstm_state1: self.base_lstm_state_out[1]})
+        return (pi_out[0], v_out[0], None)# {'base_loss':base_loss, 'decoder_loss':decoder_loss})
+
+      else:
+        pi_out, v_out, self.base_lstm_state_out = sess.run([self.base_pi, self.base_v, self.base_lstm_state],
+                                                            feed_dict={self.base_input: [s_t['image']],
                                                                        self.is_training: not self.for_display,
-                                                                       self.base_last_action_reward_input : [last_action_reward],
-                                                                       self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
-                                                                       self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
+                                                                       self.base_last_action_reward_input:  [last_action_reward],
+                                                                       self.base_initial_lstm_state0: self.base_lstm_state_out[0],
+                                                                       self.base_initial_lstm_state1: self.base_lstm_state_out[1]})
+        return (pi_out[0], v_out[0], None) #{'base_loss':base_loss})
     else:
       pi_out, v_out = sess.run([self.base_pi, self.base_v],
                                feed_dict = {self.base_input : [s_t['image']],
                                             self.is_training: not self.for_display,
                                             self.base_last_action_reward_input : [last_action_reward]} )
 
-    # pi_out: (1,3), v_out: (1)
-    return (pi_out[0], v_out[0])
+
+      # pi_out: (1,3), v_out: (1), probs_out: None or (1, h, w, C)
+      return (pi_out[0], v_out[0], None)
 
 
   def run_base_policy_value_pc_q(self, sess, s_t, last_action_reward):
     # For display tool.
     if self._use_lstm:
       pi_out, v_out, self.base_lstm_state_out, q_disp_out, q_max_disp_out = \
-          sess.run( [self.base_pi, self.base_v, self.base_lstm_state, self.pc_q_disp, self.pc_q_max_disp],
+          sess.run( [self.base_pi, self.base_v, self.base_lstm_state, self.pc_q_disp,
+                     self.pc_q_max_disp],
                     feed_dict = {self.base_input : [s_t['image']],
                                  self.is_training: not self.for_display,
                                  self.base_last_action_reward_input : [last_action_reward],
                                  self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
-                                 self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
+                                 self.base_initial_lstm_state1 : self.base_lstm_state_out[1]})
+      # pi_out: (1,3), v_out: (1), q_disp_out(1,20,20, action_size)
+      return (pi_out[0], v_out[0], q_disp_out[0])
     else:
       pi_out, v_out, q_disp_out, q_max_disp_out = \
         sess.run( [self.base_pi, self.base_v, self.pc_q_disp, self.pc_q_max_disp],
@@ -606,8 +640,8 @@ class UnrealModel(object):
                                self.is_training: not self.for_display,
                                self.base_last_action_reward_input : [last_action_reward] })
 
-    # pi_out: (1,3), v_out: (1), q_disp_out(1,20,20, action_size)
-    return (pi_out[0], v_out[0], q_disp_out[0])
+      # pi_out: (1,3), v_out: (1), q_disp_out(1,20,20, action_size)
+      return (pi_out[0], v_out[0], q_disp_out[0])
 
 
   def run_base_value(self, sess, s_t, last_action_reward):
@@ -656,7 +690,9 @@ class UnrealModel(object):
   
   def get_vars(self):
     return self.variables
-  
+
+  def get_global_vars(self):
+    return self.global_variables
 
   def sync_from(self, src_network, name=None):
     src_vars = src_network.get_vars()

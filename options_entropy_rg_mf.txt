@@ -1,0 +1,1 @@
+--env_type indoor --env_name roomgoal_suncg_mf_standard --parallel_size 4 --segnet 0 --entropy_beta 0.05

@@ -17,14 +17,14 @@ import traceback
 
 import json
 import numpy as np
-
-import minos.config.sim_config as sim_config
+import importlib
 
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.trainer import Trainer
 from train.rmsprop_applier import RMSPropApplier
 from options import get_options
+import minos.config.sim_config as sim_config
 
 USE_GPU = True # To use GPU, set True
 
@@ -65,16 +65,20 @@ class Application(object):
     """ Train each environment. """
     
     trainer = self.trainers[parallel_index]
-    if preparing:
-      trainer.prepare()
-    
+    try:
+      if preparing:
+        trainer.prepare()
+    except Exceptions as e:
+      print(str(e), flush=True)
+      raise Exception("Problem with trainer environment creation")
+
     # set start_time
     trainer.set_start_time(self.start_time)
     print("Trainer ", parallel_index, " process (re)start!", flush=True)
 
     prev_print_t = 0
     while True:
-      if self.global_t - prev_print_t >= 1000 or not prev_print_t:
+      if self.global_t - prev_print_t >= 1000 or not prev_print_t and self.global_t != prev_print_t:
         prev_print_t = self.global_t
         print("Trainer {0}>>> stop_requested: {1}, terminate_requested: {2}, global_t: {3}".format(parallel_index, self.stop_requested,
                                                 self.terminate_requested, self.global_t), flush=True)
@@ -130,10 +134,6 @@ class Application(object):
     if USE_GPU:
       device = "/gpu:0"
 
-
-    env_config = sim_config.get(flags.env_name)
-    self.image_shape = [env_config['height'], env_config['width']]
-
     if flags.segnet == -1:
       with open(flags.segnet_config) as f:
         self.config = json.load(f)
@@ -152,13 +152,15 @@ class Application(object):
       self.bayes = self.config["BAYES"]
       segnet_param_dict = {'segnet_mode': flags.segnet, 'vgg_param_dict': self.vgg_param_dict, 'use_vgg': self.use_vgg,
                        'num_classes': self.num_classes, 'bayes': self.bayes}
-    else:
+    else: # 0, 1, 2, 3
       segnet_param_dict = {'segnet_mode': flags.segnet}
+
+    env_config = sim_config.get(flags.env_name)
+    self.image_shape = [env_config['height'], env_config['width']]
     
     initial_learning_rate = log_uniform(flags.initial_alpha_low,
                                         flags.initial_alpha_high,
                                         flags.initial_alpha_log_rate)
-    
     self.global_t = 0
     
     self.stop_requested = False
@@ -169,6 +171,8 @@ class Application(object):
     objective_size = Environment.get_objective_size(flags.env_type, flags.env_name)
 
     is_training = tf.placeholder(tf.bool, name="training")
+
+    self.random_state = np.random.RandomState(seed=env_config.get("seed", 0xA3C))
 
     print("Global network initializing!", flush=True)
 
@@ -222,7 +226,8 @@ class Application(object):
                         segnet_param_dict=segnet_param_dict,
                         image_shape=self.image_shape,
                         is_training=is_training,
-                        n_classes = flags.n_classes)
+                        n_classes = flags.n_classes,
+                        random_state=self.random_state)
       self.trainers.append(trainer)
     
     # prepare session
@@ -241,14 +246,28 @@ class Application(object):
 
     # summary for tensorboard
     self.score_input = tf.placeholder(tf.float32)
+    # self.losses = {}
+    # self.base_loss = tf.placeholder(tf.float32)
+    # self.losses.update({'base_loss': self.base_loss})
+    #
+    # self.total_loss_batch = tf.placeholder(tf.float32)
+    # self.losses.update({'total_loss_batch': self.total_loss_batch})
+    # if segnet_param_dict["segnet_mode"] >= 2:
+    #   self.decoder_loss = tf.placeholder(tf.float32)
+    #   self.losses.update({'decoder_loss': self.decoder_loss})
+
     tf.summary.scalar("score", self.score_input)
-    
+
+    # for key, val in self.losses.items():
+    #   tf.summary.scalar(key, val)
+
+
     self.summary_op = tf.summary.merge_all()
     self.summary_writer = tf.summary.FileWriter(flags.log_dir,
                                                 self.sess.graph)
     
     # init or load checkpoint with saver
-    self.saver = tf.train.Saver(self.global_network.get_vars(), max_to_keep=10)
+    self.saver = tf.train.Saver(self.global_network.get_global_vars(), max_to_keep=20)
     
     checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
     if checkpoint and checkpoint.model_checkpoint_path:
@@ -269,7 +288,7 @@ class Application(object):
       # set wall time
       self.wall_t = 0.0
       self.next_save_steps = flags.save_interval_step
-  
+
     # run training threads
     self.train_threads = []
     for i in range(flags.parallel_size):
@@ -321,18 +340,19 @@ class Application(object):
 
         self.stop_requested = False
         self.next_save_steps += flags.save_interval_step
-
-        # Restart other threads
-        print("Restarting other threads!")
-        for i in range(flags.parallel_size):
-          if i != 0:
-            thread = threading.Thread(target=self.train_function, args=(i,False))
-            self.train_threads[i] = thread
-            thread.start()
     except Exception as e:
+        self.terminate_requested = True
         ## Let it be here for debug save() function!!!
         print(traceback.format_exc(), flush=True)
-        print("Erro in 'save' occured ", flush=True)
+        raise Exception("Error in 'save' occured!")
+    # finally:
+    #     # Restart other threads
+    #     print("Restarting other threads!")
+    #     for i in range(flags.parallel_size):
+    #       if i != 0:
+    #         thread = threading.Thread(target=self.train_function, args=(i,False))
+    #         self.train_threads[i] = thread
+    #         thread.start()
     
   def signal_handler(self, signal, frame):
     print('You pressed Ctrl+C!', flush=True)

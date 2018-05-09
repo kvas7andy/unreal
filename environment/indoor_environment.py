@@ -62,12 +62,15 @@ class IndoorEnvironment(environment.Environment):
     self._episode_info = result.get('episode_info')
     self._last_full_state = result.get('observation')
     img = self._last_full_state['observation']['sensors']['color']['data']
-    object_type = self._last_full_state["observation"]["sensors"]["objectType"]["data"][:, :, 2]
-    #print(object_type.shape)
     objective = self._last_full_state.get('measurements') # with measure function!
-    state = { 'image': self._preprocess_frame(img),
-              'objectType': self._preprocess_frame(object_type, "segm"),
-              'objective': objective }
+    state = {'image': self._preprocess_frame(img),
+             'objective': objective}
+    object_type = self._last_full_state["observation"]["sensors"].get("objectType", None)
+    if object_type is not None:
+      object_type = object_type["data"][:, :, 2]
+      state.update({'objectType': self._preprocess_frame(object_type, "segm")})
+
+    # print(object_type.shape)
     self.last_state = state
     self.last_action = 0
     self.last_reward = 0
@@ -84,6 +87,7 @@ class IndoorEnvironment(environment.Environment):
     if len(image.shape) == 2:  # assume object_type or depth
       image = image.reshape((image.shape[1], image.shape[0]))
       if "segm" in mode:
+        image[image == 255] = 0
         return image.astype(np.int32)
       #image = np.dstack([image, image, image])
     else:  # assume rgba
@@ -102,15 +106,18 @@ class IndoorEnvironment(environment.Environment):
     #print("Step made")
     self._last_full_state = full_state  # Last observed state
     obs = full_state['observation']['sensors']['color']['data']
-    object_type = full_state["observation"]["sensors"]["objectType"]["data"][:, :, 2]
     reward = full_state['rewards']
     terminal = full_state['terminals']
     objective = full_state.get('measurements')
+    object_type = self._last_full_state["observation"]["sensors"].get("objectType", None)
 
     if not terminal:
       state = { 'image': self._preprocess_frame(obs),
-                'objectType': self._preprocess_frame(object_type, "segm"),
                 'objective': objective }
+      if object_type is not None:
+        object_type = object_type["data"][:, :, 2]
+        state.update({'objectType': self._preprocess_frame(object_type, "segm")})
+
     else:
       state = self.last_state
 

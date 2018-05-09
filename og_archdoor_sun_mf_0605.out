@@ -1,0 +1,100 @@
+VGG parameter loaded
+Global network initializing!
+Network start creation in tread -1!
+/usr/local/lib/python3.5/dist-packages/h5py/__init__.py:36: FutureWarning: Conversion of the second argument of issubdtype from `float` to `np.floating` is deprecated. In future, it will be treated as `np.float64 == np.dtype(float).type`.
+  from ._conv import register_converters as _register_converters
+DEBUG: d1 [None, 44, 44, 16]
+DEBUG: d2 [None, 22, 22, 64]
+DEBUG: fres3 [None, 22, 22, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [None, 22, 22, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [None, 22, 22, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [None, 22, 22, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [None, 22, 22, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [None, 11, 11, 128]
+DEBUG: fres9 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [None, 11, 11, 128]
+DEBUG: L2 in factorized res module 0.0002
+Traceback (most recent call last):
+  File "main.py", line 324, in <module>
+    tf.app.run()
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/platform/app.py", line 126, in run
+    _sys.exit(main(argv))
+  File "main.py", line 321, in main
+    app.run()
+  File "main.py", line 167, in run
+    is_training=is_training)
+  File "/root/repos/minos_unreal/model/model.py", line 75, in __init__
+    self._create_network(for_display)
+  File "/root/repos/minos_unreal/model/model.py", line 84, in _create_network
+    self._create_base_network(for_display)
+  File "/root/repos/minos_unreal/model/model.py", line 137, in _create_base_network
+    self.base_dec_output = self.encoder(base_enc_output, for_display)
+  File "/root/repos/minos_unreal/model/model.py", line 225, in encoder
+    x = downsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="d1")
+  File "/root/repos/minos_unreal/erfnet.py", line 71, in downsample
+    branch_a = conv(x, num_outputs=n_filters_conv, kernel_size=3, stride=2, scope="conv")
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/framework/python/ops/arg_scope.py", line 183, in func_with_args
+    return func(*args, **current_args)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/layers/python/layers/layers.py", line 1049, in convolution
+    outputs = layer.apply(inputs)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/layers/base.py", line 828, in apply
+    return self.__call__(inputs, *args, **kwargs)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/layers/base.py", line 699, in __call__
+    self.build(input_shapes)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/layers/convolutional.py", line 144, in build
+    dtype=self.dtype)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/layers/base.py", line 546, in add_variable
+    partitioner=partitioner)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/checkpointable.py", line 436, in _add_variable_with_custom_getter
+    **kwargs_for_getter)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/variable_scope.py", line 1317, in get_variable
+    constraint=constraint)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/variable_scope.py", line 1079, in get_variable
+    constraint=constraint)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/variable_scope.py", line 417, in get_variable
+    return custom_getter(**custom_getter_kwargs)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/layers/python/layers/layers.py", line 1611, in layer_variable_getter
+    return _model_variable_getter(getter, *args, **kwargs)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/layers/python/layers/layers.py", line 1602, in _model_variable_getter
+    use_resource=use_resource)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/framework/python/ops/arg_scope.py", line 183, in func_with_args
+    return func(*args, **current_args)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/framework/python/ops/variables.py", line 291, in model_variable
+    use_resource=use_resource)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/framework/python/ops/arg_scope.py", line 183, in func_with_args
+    return func(*args, **current_args)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/contrib/framework/python/ops/variables.py", line 246, in variable
+    use_resource=use_resource)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/variable_scope.py", line 394, in _true_getter
+    use_resource=use_resource, constraint=constraint)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/variable_scope.py", line 721, in _get_single_variable
+    shape = tensor_shape.as_shape(shape)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/tensor_shape.py", line 940, in as_shape
+    return TensorShape(shape)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/tensor_shape.py", line 538, in __init__
+    self._dims = [as_dimension(d) for d in dims_iter]
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/tensor_shape.py", line 538, in <listcomp>
+    self._dims = [as_dimension(d) for d in dims_iter]
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/tensor_shape.py", line 479, in as_dimension
+    return Dimension(value)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/tensor_shape.py", line 42, in __init__
+    raise ValueError("Dimension %d must be >= 0" % self._value)
+ValueError: Dimension -112 must be >= 0

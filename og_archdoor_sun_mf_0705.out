@@ -1,0 +1,286 @@
+Global network initializing!
+Network start creation in tread -1!
+DEBUG: d1 [None, 64, 64, 16]
+DEBUG: d2 [None, 32, 32, 64]
+DEBUG: fres3 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [None, 16, 16, 128]
+DEBUG: fres9 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up17 [None, 32, 32, 64]
+DEBUG: fres18 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres19 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up20 [None, 64, 64, 16]
+DEBUG: fres21 [None, 64, 64, 16]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres22 [None, 64, 64, 16]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up23 [None, 128, 128, 5]
+DEBUG: d1 [None, 64, 64, 16]
+DEBUG: d2 [None, 32, 32, 64]
+DEBUG: fres3 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [None, 16, 16, 128]
+DEBUG: fres9 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d1 [3, 64, 64, 16]
+DEBUG: d2 [3, 32, 32, 64]
+DEBUG: fres3 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [3, 16, 16, 128]
+DEBUG: fres9 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+Network start creation in tread 0!
+2018-05-07 16:18:26.401057: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX2 FMA
+2018-05-07 16:18:26.512671: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:06:00.0
+totalMemory: 10.92GiB freeMemory: 10.19GiB
+2018-05-07 16:18:26.512714: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1435] Adding visible gpu devices: 0
+2018-05-07 16:18:26.725328: I tensorflow/core/common_runtime/gpu/gpu_device.cc:923] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-05-07 16:18:26.725377: I tensorflow/core/common_runtime/gpu/gpu_device.cc:929]      0 
+2018-05-07 16:18:26.725386: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 0:   N 
+2018-05-07 16:18:26.725613: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1053] Created TensorFlow device (/job:localhost/replica:0/task:0/device:GPU:0 with 9863 MB memory) -> physical GPU (device: 0, name: GeForce GTX 1080 Ti, pci bus id: 0000:06:00.0, compute capability: 6.1)
+/usr/local/lib/python3.5/dist-packages/h5py/__init__.py:36: FutureWarning: Conversion of the second argument of issubdtype from `float` to `np.floating` is deprecated. In future, it will be treated as `np.float64 == np.dtype(float).type`.
+  from ._conv import register_converters as _register_converters
+DEBUG: d1 [None, 64, 64, 16]
+DEBUG: d2 [None, 32, 32, 64]
+DEBUG: fres3 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [None, 16, 16, 128]
+DEBUG: fres9 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up17 [None, 32, 32, 64]
+DEBUG: fres18 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres19 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up20 [None, 64, 64, 16]
+DEBUG: fres21 [None, 64, 64, 16]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres22 [None, 64, 64, 16]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: up23 [None, 128, 128, 5]
+DEBUG: d1 [None, 64, 64, 16]
+DEBUG: d2 [None, 32, 32, 64]
+DEBUG: fres3 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [None, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [None, 16, 16, 128]
+DEBUG: fres9 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [None, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d1 [3, 64, 64, 16]
+DEBUG: d2 [3, 32, 32, 64]
+DEBUG: fres3 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres4 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres5 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres6 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres7 [3, 32, 32, 64]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: d8 [3, 16, 16, 128]
+DEBUG: fres9 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres10 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres11 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres12 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres13 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres14 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres15 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+DEBUG: fres16 [3, 16, 16, 128]
+DEBUG: L2 in factorized res module 0.0002
+- Using uniform Class Weights of 1.0
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1322, in _do_call
+    return fn(*args)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1307, in _run_fn
+    options, feed_dict, fetch_list, target_list, run_metadata)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1409, in _call_tf_sessionrun
+    run_metadata)
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Assign requires shapes of both tensors to match. lhs shape= [4,4,5,16] rhs shape= [4,4,12,16]
+	 [[Node: save/Assign_37 = Assign[T=DT_FLOAT, _class=["loc:@net_-1/base_decoder/up23/weights"], use_locking=true, validate_shape=true, _device="/job:localhost/replica:0/task:0/device:GPU:0"](net_-1/base_decoder/up23/weights, save/RestoreV2/_7)]]
+	 [[Node: save/RestoreV2/_298 = _Send[T=DT_FLOAT, client_terminated=false, recv_device="/job:localhost/replica:0/task:0/device:GPU:0", send_device="/job:localhost/replica:0/task:0/device:CPU:0", send_device_incarnation=1, tensor_name="edge_304_save/RestoreV2", _device="/job:localhost/replica:0/task:0/device:CPU:0"](save/RestoreV2:107)]]
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "main.py", line 326, in <module>
+    tf.app.run()
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/platform/app.py", line 126, in run
+    _sys.exit(main(argv))
+  File "main.py", line 323, in main
+    app.run()
+  File "main.py", line 235, in run
+    self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 1802, in restore
+    {self.saver_def.filename_tensor_name: save_path})
+  File "main.py", line 216, in run_
+    return self.sess.__run(*args, **kwargs)  # getattr(self, "__run")(self, *args, **kwargs)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 900, in run
+    run_metadata_ptr)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1135, in _run
+    feed_dict_tensor, options, run_metadata)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1316, in _do_run
+    run_metadata)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/client/session.py", line 1335, in _do_call
+    raise type(e)(node_def, op, message)
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Assign requires shapes of both tensors to match. lhs shape= [4,4,5,16] rhs shape= [4,4,12,16]
+	 [[Node: save/Assign_37 = Assign[T=DT_FLOAT, _class=["loc:@net_-1/base_decoder/up23/weights"], use_locking=true, validate_shape=true, _device="/job:localhost/replica:0/task:0/device:GPU:0"](net_-1/base_decoder/up23/weights, save/RestoreV2/_7)]]
+	 [[Node: save/RestoreV2/_298 = _Send[T=DT_FLOAT, client_terminated=false, recv_device="/job:localhost/replica:0/task:0/device:GPU:0", send_device="/job:localhost/replica:0/task:0/device:CPU:0", send_device_incarnation=1, tensor_name="edge_304_save/RestoreV2", _device="/job:localhost/replica:0/task:0/device:CPU:0"](save/RestoreV2:107)]]
+
+Caused by op 'save/Assign_37', defined at:
+  File "main.py", line 326, in <module>
+    tf.app.run()
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/platform/app.py", line 126, in run
+    _sys.exit(main(argv))
+  File "main.py", line 323, in main
+    app.run()
+  File "main.py", line 231, in run
+    self.saver = tf.train.Saver(self.global_network.get_vars(), max_to_keep=10)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 1338, in __init__
+    self.build()
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 1347, in build
+    self._build(self._filename, build_save=True, build_restore=True)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 1384, in _build
+    build_save=build_save, build_restore=build_restore)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 835, in _build_internal
+    restore_sequentially, reshape)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 494, in _AddRestoreOps
+    assign_ops.append(saveable.restore(saveable_tensors, shapes))
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/training/saver.py", line 185, in restore
+    self.op.get_shape().is_fully_defined())
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/state_ops.py", line 283, in assign
+    validate_shape=validate_shape)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/ops/gen_state_ops.py", line 60, in assign
+    use_locking=use_locking, name=name)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/op_def_library.py", line 787, in _apply_op_helper
+    op_def=op_def)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/ops.py", line 3392, in create_op
+    op_def=op_def)
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/framework/ops.py", line 1718, in __init__
+    self._traceback = self._graph._extract_stack()  # pylint: disable=protected-access
+
+InvalidArgumentError (see above for traceback): Assign requires shapes of both tensors to match. lhs shape= [4,4,5,16] rhs shape= [4,4,12,16]
+	 [[Node: save/Assign_37 = Assign[T=DT_FLOAT, _class=["loc:@net_-1/base_decoder/up23/weights"], use_locking=true, validate_shape=true, _device="/job:localhost/replica:0/task:0/device:GPU:0"](net_-1/base_decoder/up23/weights, save/RestoreV2/_7)]]
+	 [[Node: save/RestoreV2/_298 = _Send[T=DT_FLOAT, client_terminated=false, recv_device="/job:localhost/replica:0/task:0/device:GPU:0", send_device="/job:localhost/replica:0/task:0/device:CPU:0", send_device_incarnation=1, tensor_name="edge_304_save/RestoreV2", _device="/job:localhost/replica:0/task:0/device:CPU:0"](save/RestoreV2:107)]]
+

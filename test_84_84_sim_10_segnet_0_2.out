@@ -1,0 +1,45 @@
+/usr/local/lib/python3.5/dist-packages/h5py/__init__.py:36: FutureWarning: Conversion of the second argument of issubdtype from `float` to `np.floating` is deprecated. In future, it will be treated as `np.float64 == np.dtype(float).type`.
+  from ._conv import register_converters as _register_converters
+Traceback (most recent call last):
+  File "/usr/lib/python3.5/tkinter/__init__.py", line 36, in <module>
+    import _tkinter
+ImportError: No module named '_tkinter'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "main.py", line 323, in <module>
+    tf.app.run()
+  File "/usr/local/lib/python3.5/dist-packages/tensorflow/python/platform/app.py", line 126, in run
+    _sys.exit(main(argv))
+  File "main.py", line 320, in main
+    app.run()
+  File "main.py", line 154, in run
+    flags.env_name)
+  File "/root/repos/minos_unreal/environment/environment.py", line 56, in get_action_size
+    from . import indoor_environment
+  File "/root/repos/minos_unreal/environment/indoor_environment.py", line 11, in <module>
+    from minos.lib.RoomSimulator import RoomSimulator
+  File "/root/repos/minos/minos/lib/RoomSimulator.py", line 7, in <module>
+    from .Simulator import Simulator
+  File "/root/repos/minos/minos/lib/Simulator.py", line 23, in <module>
+    from . import common
+  File "/root/repos/minos/minos/lib/common.py", line 8, in <module>
+    import matplotlib.pyplot as plt
+  File "/usr/local/lib/python3.5/dist-packages/matplotlib/pyplot.py", line 115, in <module>
+    _backend_mod, new_figure_manager, draw_if_interactive, _show = pylab_setup()
+  File "/usr/local/lib/python3.5/dist-packages/matplotlib/backends/__init__.py", line 62, in pylab_setup
+    [backend_name], 0)
+  File "/usr/local/lib/python3.5/dist-packages/matplotlib/backends/backend_tkagg.py", line 4, in <module>
+    from . import tkagg  # Paint image to Tk photo blitter extension.
+  File "/usr/local/lib/python3.5/dist-packages/matplotlib/backends/tkagg.py", line 5, in <module>
+    from six.moves import tkinter as Tk
+  File "/usr/local/lib/python3.5/dist-packages/six.py", line 92, in __get__
+    result = self._resolve()
+  File "/usr/local/lib/python3.5/dist-packages/six.py", line 115, in _resolve
+    return _import_module(self.mod)
+  File "/usr/local/lib/python3.5/dist-packages/six.py", line 82, in _import_module
+    __import__(name)
+  File "/usr/lib/python3.5/tkinter/__init__.py", line 38, in <module>
+    raise ImportError(str(msg) + ', please install the python3-tk package')
+ImportError: No module named '_tkinter', please install the python3-tk package

@@ -90,7 +90,7 @@ def romeranetB_logits(X, Y, n_classes, alpha=0.001, dropout=0.3, l2=None, is_tra
     # TODO: register factorized_res_module and upsample and downsample with arg_scope
     #       and pass dropout, is_training, etc to it.
     # TODO: Add weight decay.
-    with tf.name_scope("preprocess") as scope:
+    with tf.variable_scope("preprocess") as scope:
         x = tf.div(X, 255., name="rescaled_inputs")
 
     x = downsample(x, n_filters=16, is_training=is_training, name="d1")
@@ -132,7 +132,7 @@ def erfnetA(X, Y, n_classes, alpha=0.001, dropout=0.3, l2=None, is_training=Fals
     # TODO: register factorized_res_module and upsample and downsample with arg_scope
     #       and pass dropout, is_training, etc to it.
     # TODO: Add weight decay.
-    with tf.name_scope("preprocess") as scope:
+    with tf.variable_scope("preprocess") as scope:
         x = tf.div(X, 255., name="rescaled_inputs")
 
     x = downsample(x, n_filters=16, is_training=is_training, name="d1")
@@ -178,7 +178,7 @@ def erfnetB(X, Y, n_classes, alpha=0.001, dropout=0.3, l2=None, is_training=Fals
     # TODO: Add weight decay.
 
     if encoder:
-        with tf.name_scope("preprocess") as scope:
+        with tf.variable_scope("preprocess") as scope:
             x = tf.div(X, 255., name="rescaled_inputs")
 
         x = downsample(x, n_filters=16, is_training=is_training, l2=l2, name="d1")
