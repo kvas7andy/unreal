@@ -345,14 +345,14 @@ class Application(object):
         ## Let it be here for debug save() function!!!
         print(traceback.format_exc(), flush=True)
         raise Exception("Error in 'save' occured!")
-    # finally:
-    #     # Restart other threads
-    #     print("Restarting other threads!")
-    #     for i in range(flags.parallel_size):
-    #       if i != 0:
-    #         thread = threading.Thread(target=self.train_function, args=(i,False))
-    #         self.train_threads[i] = thread
-    #         thread.start()
+    finally:
+        # Restart other threads
+        print("Restarting other threads!")
+        for i in range(flags.parallel_size):
+          if i != 0:
+            thread = threading.Thread(target=self.train_function, args=(i,False))
+            self.train_threads[i] = thread
+            thread.start()
     
   def signal_handler(self, signal, frame):
     print('You pressed Ctrl+C!', flush=True)
