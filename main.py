@@ -156,7 +156,7 @@ class Application(object):
       segnet_param_dict = {'segnet_mode': flags.segnet}
 
     env_config = sim_config.get(flags.env_name)
-    self.image_shape = [env_config['height'], env_config['width']]
+    self.image_shape = [env_config.get('height', 84), env_config.get('width', 84)]
     
     initial_learning_rate = log_uniform(flags.initial_alpha_low,
                                         flags.initial_alpha_high,
