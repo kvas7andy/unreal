@@ -558,13 +558,17 @@ class Trainer(object):
       return_list = return_list[1:]
       return_string += "\t\tRP loss: {}\n".format(rp_loss)
       losses_eval.update({'rp_loss_batch': rp_loss})
+    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+      if self.segnet_mode >= 2:
+        return_string += "\t\tmIoU: {}\n".format(return_list[-1])
 
       summary_dict['values'].update(losses_eval)
 
       # Printing losses
     if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
-      self._record_one(sess, summary_writer, summary_op_dict['eval_input'], eval_input,
-                       return_list[-1], global_t)
+      if self.segnet_mode >= 2:
+        self._record_one(sess, summary_writer, summary_op_dict['eval_input'], eval_input,
+                         return_list[-1], global_t)
       self._record_one(sess, summary_writer, summary_op_dict['entropy'], entropy_input,
                        entropy, global_t)
       summary_writer.flush()
