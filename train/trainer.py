@@ -562,7 +562,7 @@ class Trainer(object):
       if self.segnet_mode >= 2:
         return_string += "\t\tmIoU: {}\n".format(return_list[-1])
 
-      summary_dict['values'].update(losses_eval)
+    summary_dict['values'].update(losses_eval)
 
       # Printing losses
     if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
