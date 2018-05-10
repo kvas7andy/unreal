@@ -414,7 +414,7 @@ class Trainer(object):
   def process(self, sess, global_t, summary_writer, summary_op_dict,
               score_input, eval_input, entropy_input, losses_input):
 
-    if self.local_t == 0:
+    if self.local_t == 0 and self.segnet_mode >= 2:
       sess.run(self.local_network.reset_evaluation_vars)
     # Fill experience replay buffer
     #print("Inside train process of thread!", flush=True)
