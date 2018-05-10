@@ -494,6 +494,7 @@ class UnrealModel(object):
 
 
     self.base_loss = self.policy_loss + self.value_loss
+    decoder_loss = None
     
     if self.segnet_mode >= 2:
       unrolled_logits = tf.reshape(self.base_dec_output, (-1, self.n_classes))
@@ -514,9 +515,9 @@ class UnrealModel(object):
       self.regul_loss = tf.losses.get_regularization_loss(scope="net_{0}".format(self._thread_index))
       self.decoder_loss += self.regul_loss
       # SUMS ALL LOSSES - even Regularization losses automatically
+      decoder_loss = self.decoder_loss
 
-
-    return self.base_loss, self.decoder_loss
+    return self.base_loss, decoder_loss
 
   
   def _pc_loss(self):
@@ -558,7 +559,10 @@ class UnrealModel(object):
   def prepare_loss(self):
     with tf.device(self._device):
       base_loss, decoder_loss = self._base_loss()
-      loss = base_loss + decoder_loss
+      loss = base_loss
+      if decoder_loss is not None:
+        loss += decoder_loss
+
 
       if self._use_pixel_change:
         self.pc_loss = self._pc_loss()
