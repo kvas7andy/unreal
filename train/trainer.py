@@ -16,7 +16,7 @@ from train.experience import Experience, ExperienceFrame
 
 LOG_INTERVAL = 200
 PERFORMANCE_LOG_INTERVAL = 1000
-PERFORMANCE_LOG_INTERVAL_LOSS = 100
+LOSS_AND_EVAL_LOG_INTERVAL = 1000
 
 GPU_LOG = False # Change main.py
 
@@ -134,20 +134,24 @@ class Trainer(object):
     return self.random_state.choice(len(pi_values), p=pi_values)
 
   
-  def _record_score(self, sess, summary_writer, summary_op, score_input, score, global_t):
-    summary_str = sess.run(summary_op, feed_dict={
-      score_input: score
-    })
-    summary_writer.add_summary(summary_str, global_t)
-    summary_writer.flush()
+  def _record_one(self, sess, summary_writer, summary_op, score_input, score, global_t):
+    if self.thread_index == 0:
+      summary_str = sess.run(summary_op, feed_dict={
+        score_input: score
+      })
+      summary_writer.add_summary(summary_str, global_t)
 
-  def _record_loss(self, sess, summary_writer, summary_op,
-                    loss_input, loss, global_t):
-    summary_str = sess.run(summary_op, feed_dict={
-      loss_input: loss
-    })
-    summary_writer.add_summary(summary_str, global_t)
-    summary_writer.flush()
+  def _record_all(self, sess, summary_writer, summary_op,
+                    dict_input, dict_eval, global_t):
+    if self.thread_index == 0:
+      assert set(dict_input.keys()) == set(dict_eval.keys()), print(dict_input.keys(), dict_eval.keys())
+
+      feed_dict = {}
+      for key in dict_input.keys():
+        feed_dict.update({dict_input[key]: dict_eval[key]})
+      summary_str = sess.run(summary_op, feed_dict=feed_dict)
+
+      summary_writer.add_summary(summary_str, global_t)
 
     
   def set_start_time(self, start_time):
@@ -193,9 +197,9 @@ class Trainer(object):
       print("### Performance : {} STEPS in {:.0f} sec. {:.0f} STEPS/sec. {:.2f}M STEPS/hour".format(
         global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))#, flush=True)
       # print("### Experience : {}".format(self.experience.get_debug_string()))
-    
 
-  def _process_base(self, sess, global_t, summary_writer, summary_op, score_input):#, losses_input):
+
+  def _process_base(self, sess, global_t, summary_writer, summary_op_dict, summary_dict):#, losses_input):
     # [Base A3C]
     states = []
     last_action_rewards = []
@@ -224,12 +228,6 @@ class Trainer(object):
       pi_, value_, losses = self.local_network.run_base_policy_and_value(sess,
                                                                  self.environment.last_state,
                                                                  last_action_reward, mode)
-
-      # if losses is not None:
-      #   for key, val in losses.items(): #["base_loss", "decoder_loss"]
-      #     if key in losses_input:
-      #       self._record_loss(sess, summary_writer, summary_op, losses_input[key],
-      #                         losses[key], global_t)
       
       action = self.choose_action(pi_)
 
@@ -266,8 +264,7 @@ class Trainer(object):
         terminal_end = True
         print("Trainer {}>>> score={}".format(self.thread_index, self.episode_reward))#, flush=True)
 
-        self._record_score(sess, summary_writer, summary_op, score_input,
-                           self.episode_reward, global_t)
+        summary_dict['values'].update({'score_input': self.episode_reward})
           
         self.episode_reward = 0
         self.environment.reset()
@@ -413,10 +410,12 @@ class Trainer(object):
       rp_c[2] = 1.0 # negative
     batch_rp_c.append(rp_c)
     return batch_rp_si, batch_rp_c
-  
-  
-  def process(self, sess, global_t, summary_writer, summary_op, score_input):
 
+  def process(self, sess, global_t, summary_writer, summary_op_dict,
+              score_input, eval_input, entropy_input, losses_input):
+
+    if self.local_t == 0:
+      sess.run(self.local_network.reset_evaluation_vars)
     # Fill experience replay buffer
     #print("Inside train process of thread!", flush=True)
     if not self.experience.is_full():
@@ -432,6 +431,8 @@ class Trainer(object):
     sess.run( self.sync )
     #print("Weights copied successfully!", flush=True)
 
+    summary_dict = {'placeholders': {}, 'values': {}}
+    summary_dict['placeholders'].update(losses_input)
 
     # [Base]
     #print("[Base]", flush=True)
@@ -439,8 +440,14 @@ class Trainer(object):
           self._process_base(sess,
                              global_t,
                              summary_writer,
-                             summary_op,
-                             score_input)
+                             summary_op_dict,
+                             summary_dict)
+    if summary_dict['values'].get('score_input', None) is not None:
+      self._record_one(sess, summary_writer, summary_op_dict['score_input'], score_input,
+                       summary_dict['values']['score_input'], global_t)
+      summary_writer.flush()
+      summary_dict['values'] = {}
+
     feed_dict = {
       self.local_network.base_input: batch_si,
       self.local_network.base_last_action_reward_input: batch_last_action_rewards,
@@ -495,20 +502,25 @@ class Trainer(object):
 
 
     grad_check = None
-    grad_check = [tf.add_check_numerics_ops()]
+    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+      grad_check = [tf.add_check_numerics_ops()]
     #print("Applying gradients in train!", flush=True)
     # Calculate gradients and copy them to global network.
     out_list = [self.apply_gradients]
-    if self.local_t - self.prev_local_t_loss >= PERFORMANCE_LOG_INTERVAL_LOSS:
-      out_list += [self.local_network.total_loss, self.local_network.base_loss]
-      if self.segnet_mode >= 2:
-        out_list += [self.local_network.decoder_loss]
-      if self.use_pixel_change:
-        out_list += [self.local_network.pc_loss]
-      if self.use_value_replay:
-        out_list += [self.local_network.vr_loss]
-      if self.use_reward_prediction:
-        out_list += [self.local_network.rp_loss]
+    out_list += [self.local_network.update_evaluation_vars, self.local_network.total_loss,
+                 self.local_network.base_loss, self.local_network.policy_loss,
+                 self.local_network.value_loss, self.local_network.entropy]
+    if self.segnet_mode >= 2:
+      out_list += [self.local_network.decoder_loss]
+      out_list += [self.local_network.regul_loss]
+    if self.use_pixel_change:
+      out_list += [self.local_network.pc_loss]
+    if self.use_value_replay:
+      out_list += [self.local_network.vr_loss]
+    if self.use_reward_prediction:
+      out_list += [self.local_network.rp_loss]
+    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+      out_list += [self.local_network.evaluation]
 
     with tf.control_dependencies(grad_check):
       if GPU_LOG:
@@ -518,34 +530,44 @@ class Trainer(object):
         return_list = sess.run(out_list,
                   feed_dict=feed_dict, options=run_options)
 
-    # if losses is not None:
-    #
-    #   self._record_loss(sess, summary_writer, summary_op, losses_input["total_loss"],
-    #                     losses["total_loss"], global_t)
+    _, _, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:7]
+    return_list = return_list[7:]
+    return_string = "Trainer {}>>> Total loss: {}, Base loss: {}\n".format(self.thread_index, total_loss, base_loss)
+    return_string += "\t\tPolicy loss: {}, Value loss: {}, Entropy: {}\n".format(policy_loss, value_loss, entropy)
+    losses_eval = {'total_loss_batch': total_loss, 'base_loss_batch': base_loss,
+                   'policy_loss_batch': policy_loss, 'value_loss_batch': value_loss}
+    if self.segnet_mode >= 2:
+      decoder_loss, l2_loss = return_list[:2]
+      return_list = return_list[2:]
+      return_string += "\t\tDecoder loss: {}, L2 weights loss: {}\n".format(decoder_loss, l2_loss)
+      losses_eval.update({'decoder_loss_batch': decoder_loss, 'l2_weights_loss_batch': l2_loss})
+    if self.use_pixel_change:
+      pc_loss = return_list[0]
+      return_list = return_list[1:]
+      return_string += "\t\tPC loss: {}\n".format(pc_loss)
+      losses_eval.update({'pc_loss_batch': pc_loss})
+    if self.use_value_replay:
+      vr_loss = return_list[0]
+      return_list = return_list[1:]
+      return_string += "\t\tVR loss: {}\n".format(vr_loss)
+      losses_eval.update({'vr_loss_batch': vr_loss})
+    if self.use_reward_prediction:
+      rp_loss = return_list[0]
+      return_list = return_list[1:]
+      return_string += "\t\tRP loss: {}\n".format(rp_loss)
+      losses_eval.update({'rp_loss_batch': rp_loss})
 
-    if self.local_t - self.prev_local_t_loss >= PERFORMANCE_LOG_INTERVAL_LOSS:
-      _, total_loss, base_loss = return_list[:3]
-      return_list = return_list[3:]
-      return_string = "Trainer {}>>> Total loss: {}, Base loss: {}\n".format(self.thread_index, total_loss, base_loss)
-      if self.segnet_mode >= 2:
-        decoder_loss = return_list[0]
-        return_list = return_list[1:]
-        return_string += "\t\tDecoder loss: {}\n".format(decoder_loss)
-      if self.use_pixel_change:
-        pc_loss = return_list[0]
-        return_list = return_list[1:]
-        return_string += "\t\tPC loss: {}\n".format(pc_loss)
-      if self.use_value_replay:
-        vr_loss = return_list[0]
-        return_list = return_list[1:]
-        return_string += "\t\tVR loss: {}\n".format(vr_loss)
-      if self.use_reward_prediction:
-        rp_loss = return_list[0]
-        return_list = return_list[1:]
-        return_string += "\t\tRP loss: {}\n".format(rp_loss)
+      summary_dict['values'].update(losses_eval)
 
-      self.prev_local_t_loss += PERFORMANCE_LOG_INTERVAL_LOSS
+      # Printing losses
+    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+      self._record_one(sess, summary_writer, summary_op_dict['eval_input'], eval_input,
+                       return_list[-1], global_t)
+      self._record_one(sess, summary_writer, summary_op_dict['entropy'], entropy_input,
+                       entropy, global_t)
+      summary_writer.flush()
       print(return_string)
+      self.prev_local_t_loss += LOSS_AND_EVAL_LOG_INTERVAL
 
     if GPU_LOG:
       fetched_timeline = timeline.Timeline(self.run_metadata.step_stats)
@@ -553,6 +575,10 @@ class Trainer(object):
       self.many_runs_timeline.update_timeline(chrome_trace)
     
     self._print_log(global_t)
+
+    #Recording score and losses
+    self._record_all(sess, summary_writer, summary_op_dict['losses_input'], summary_dict['placeholders'],
+                     summary_dict['values'], global_t)
     
     # Return advanced local step size
     diff_local_t = self.local_t - start_local_t

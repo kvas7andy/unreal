@@ -31,6 +31,10 @@ USE_GPU = True # To use GPU, set True
 # get command line args
 flags = get_options("training")
 flags.log_dir = os.path.join(flags.checkpoint_dir, flags.log_dir)
+
+if flags.segnet >= 1:
+  flags.use_pixel_change = False
+
 Environment.set_log_dir(flags.log_dir)
 
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -68,7 +72,7 @@ class Application(object):
     try:
       if preparing:
         trainer.prepare()
-    except Exceptions as e:
+    except Exception as e:
       print(str(e), flush=True)
       raise Exception("Problem with trainer environment creation")
 
@@ -98,12 +102,16 @@ class Application(object):
         # Save checkpoint
         self.save()
 
+
       try:
         diff_global_t = trainer.process(self.sess,
                                         self.global_t,
                                         self.summary_writer,
-                                        self.summary_op,
-                                        self.score_input)
+                                        self.summary_op_dict,
+                                        self.score_input,
+                                        self.mIoU_input,
+                                        self.entropy_input,
+                                        self.losses_input)
 
         self.global_t += diff_global_t
 
@@ -243,26 +251,51 @@ class Application(object):
 
     self.sess.run(tf.global_variables_initializer())
 
-
     # summary for tensorboard
     self.score_input = tf.placeholder(tf.float32)
-    # self.losses = {}
-    # self.base_loss = tf.placeholder(tf.float32)
-    # self.losses.update({'base_loss': self.base_loss})
-    #
-    # self.total_loss_batch = tf.placeholder(tf.float32)
-    # self.losses.update({'total_loss_batch': self.total_loss_batch})
-    # if segnet_param_dict["segnet_mode"] >= 2:
-    #   self.decoder_loss = tf.placeholder(tf.float32)
-    #   self.losses.update({'decoder_loss': self.decoder_loss})
+    self.mIoU_input = tf.placeholder(tf.float32)
 
-    tf.summary.scalar("score", self.score_input)
+    self.losses_input = {}
 
-    # for key, val in self.losses.items():
-    #   tf.summary.scalar(key, val)
+    self.total_loss = tf.placeholder(tf.float32,  name='total_loss')
+    self.losses_input.update({'total_loss_batch': self.total_loss})
+
+    self.base_loss = tf.placeholder(tf.float32, name='base_loss')
+    self.losses_input.update({'base_loss_batch': self.base_loss})
+
+    self.policy_loss = tf.placeholder(tf.float32,  name='policy_loss')
+    self.losses_input.update({'policy_loss_batch': self.policy_loss})
+
+    self.value_loss = tf.placeholder(tf.float32, name='policy_loss')
+    self.losses_input.update({'value_loss_batch': self.value_loss})
+
+    self.entropy_input = tf.placeholder(tf.float32, shape=[None], name='entropy')
+
+    if segnet_param_dict["segnet_mode"] >= 2:
+      self.decoder_loss = tf.placeholder(tf.float32,  name='decoder_loss')
+      self.losses_input.update({'decoder_loss_batch': self.decoder_loss})
+      self.l2_weights_loss = tf.placeholder(tf.float32, name='regul_weights_loss')
+      self.losses_input.update({'l2_weights_loss_batch': self.l2_weights_loss})
+    if flags.use_pixel_change:
+      self.pc_loss = tf.placeholder(tf.float32,  name='pc_loss')
+      self.losses_input.update({'pc_loss_batch': self.pc_loss})
+    if flags.use_value_replay:
+      self.vr_loss = tf.placeholder(tf.float32,  name='vr_loss')
+      self.losses_input.update({'vr_loss_batch': self.vr_loss})
+    if flags.use_reward_prediction:
+      self.rp_loss = tf.placeholder(tf.float32,  name='rp_loss')
+      self.losses_input.update({'rp_loss_batch': self.rp_loss})
+
+    score_summary = tf.summary.scalar("score", self.score_input)
+    eval_summary = tf.summary.scalar("mIoU_all", self.mIoU_input)
+    losses_summary_list = []
+    for key, val in self.losses_input.items():
+      losses_summary_list += [tf.summary.scalar(key, val)]
 
 
-    self.summary_op = tf.summary.merge_all()
+    self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary,
+                            'losses_input': tf.summary.merge(losses_summary_list),
+                            'entropy': tf.summary.histogram('entropy_stepTD', self.entropy_input)}
     self.summary_writer = tf.summary.FileWriter(flags.log_dir,
                                                 self.sess.graph)
     

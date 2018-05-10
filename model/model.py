@@ -103,8 +103,8 @@ class UnrealModel(object):
       if self._use_reward_prediction:
         self._create_rp_network()
 
-      if for_display and self.segnet_mode >= 2:
-        self._create_evaluation_metric_ops()
+      if self.segnet_mode >= 2:
+        self._create_mIoU_evaluation_metric_ops()
       
       self.reset_state()
 
@@ -113,55 +113,56 @@ class UnrealModel(object):
 
 
   def _create_base_network(self, for_display=False):
-    # State (Base image input)
-    self.base_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3], name='base_input')
+    with tf.name_scope("base_network") as scope:
+      # State (Base image input)
+      self.base_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3], name='base_input')
 
-    # Last action and reward and objective
-    self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
+      # Last action and reward and objective
+      self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
-    # Conv layers
-    base_enc_output = self.encoder(self.base_input)
-    
-    if self._use_lstm:
-      # LSTM layer
-      self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_0')
-      self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_1')
+      # Conv layers
+      base_enc_output = self.encoder(self.base_input)
 
-      self.base_initial_lstm_state = tf.contrib.rnn.LSTMStateTuple(self.base_initial_lstm_state0,
-                                                                   self.base_initial_lstm_state1)
+      if self._use_lstm:
+        # LSTM layer
+        self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_0')
+        self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='base_initial_lstm_state0_1')
 
-      self.base_lstm_outputs, self.base_lstm_state = \
-        self._base_lstm_layer(base_enc_output,
-                              self.base_last_action_reward_input,
-                              self.base_initial_lstm_state)
+        self.base_initial_lstm_state = tf.contrib.rnn.LSTMStateTuple(self.base_initial_lstm_state0,
+                                                                     self.base_initial_lstm_state1)
 
-      self.base_pi = self._base_policy_layer(self.base_lstm_outputs) # policy output
-      self.base_v  = self._base_value_layer(self.base_lstm_outputs)  # value output
-    else:
-      self.base_fcn_outputs = self._base_fcn_layer(base_enc_output,
-                                                   self.base_last_action_reward_input)
-      self.base_pi = self._base_policy_layer(self.base_fcn_outputs) # policy output
-      self.base_v  = self._base_value_layer(self.base_fcn_outputs)  # value output
+        self.base_lstm_outputs, self.base_lstm_state = \
+          self._base_lstm_layer(base_enc_output,
+                                self.base_last_action_reward_input,
+                                self.base_initial_lstm_state)
 
-    if self.segnet_mode == 2:
-      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
+        self.base_pi = self._base_policy_layer(self.base_lstm_outputs) # policy output
+        self.base_v  = self._base_value_layer(self.base_lstm_outputs)  # value output
+      else:
+        self.base_fcn_outputs = self._base_fcn_layer(base_enc_output,
+                                                     self.base_last_action_reward_input)
+        self.base_pi = self._base_policy_layer(self.base_fcn_outputs) # policy output
+        self.base_v  = self._base_value_layer(self.base_fcn_outputs)  # value output
 
-      self.base_dec_output = self.decoder(base_enc_output)
-      self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
-      self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+      if self.segnet_mode == 2:
+        self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
 
-    elif self.segnet_mode == 3 and self._use_lstm:
-      self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
+        self.base_dec_output = self.decoder(base_enc_output)
+        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
+        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
 
-      encoder_shape = base_enc_output.get_shape().as_list()
-      num_outputs = np.prod(encoder_shape)
-      #input_size = lstm_outputs.get_shape().as_list()
-      #lstm_outputs = np.reshape(self.base_lstm_outputs, (1, -1, 256))
-      base_fc_from_lstm = tf.reshape(fc(self.base_lstm_outputs, num_outputs, scope="fc_lstm-decoder"), encoder_shape)
-      self.base_dec_output = self.decoder(base_fc_from_lstm, scope="from_fc_lstm")
+      elif self.segnet_mode == 3 and self._use_lstm:
+        self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
 
-      self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
-      self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
+        encoder_shape = base_enc_output.get_shape().as_list()
+        num_outputs = np.prod(encoder_shape)
+        #input_size = lstm_outputs.get_shape().as_list()
+        #lstm_outputs = np.reshape(self.base_lstm_outputs, (1, -1, 256))
+        base_fc_from_lstm = tf.reshape(fc(self.base_lstm_outputs, num_outputs, scope="fc_lstm-decoder"), encoder_shape)
+        self.base_dec_output = self.decoder(base_fc_from_lstm, scope="from_fc_lstm")
+
+        self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
+        self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
 
 
   def encoder(self, state_input, reuse=False):
@@ -282,7 +283,7 @@ class UnrealModel(object):
 
   def _base_fcn_layer(self, conv_output, last_action_reward_objective_input,
                       reuse=False):
-    with tf.variable_scope("base_fcn", reuse=reuse) as scope:
+    with tf.variable_scope("base_fcn_layer", reuse=reuse) as scope:
       # Weights (9x9x32=2592)
       W_fc1, b_fc1 = self._fc_variable([2592, 256], "base_fc1")
 
@@ -298,7 +299,7 @@ class UnrealModel(object):
 
   def _base_lstm_layer(self, conv_output, last_action_reward_objective_input, initial_state_input,
                        reuse=False):
-    with tf.variable_scope("base_lstm", reuse=reuse) as scope:
+    with tf.variable_scope("base_lstm_layer", reuse=reuse) as scope:
       # Weights (9x9x32=2592)
       # 360x480 input: 12x15x512=92160
       #print(tf.shape(conv_output).value)
@@ -334,7 +335,7 @@ class UnrealModel(object):
 
 
   def _base_policy_layer(self, lstm_outputs, reuse=False):
-    with tf.variable_scope("base_policy", reuse=reuse) as scope:
+    with tf.name_scope("base_policy_layer") as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # Weight for policy output layer
       W_fc_p, b_fc_p = self._fc_variable([input_size, self._action_size], "base_fc_p")
@@ -344,7 +345,7 @@ class UnrealModel(object):
 
 
   def _base_value_layer(self, lstm_outputs, reuse=False):
-    with tf.variable_scope("base_value", reuse=reuse) as scope:
+    with tf.variable_scope("base_value_layer", reuse=reuse) as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # Weight for value output layer
       W_fc_v, b_fc_v = self._fc_variable([input_size, 1], "base_fc_v")
@@ -356,29 +357,30 @@ class UnrealModel(object):
 
 
   def _create_pc_network(self):
-    # State (Image input) 
-    self.pc_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3])
+    with tf.name_scope("pc_network") as scope:
+      # State (Image input)
+      self.pc_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3])
 
-    # Last action and reward and objective
-    self.pc_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
+      # Last action and reward and objective
+      self.pc_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
-    # pc conv layers
-    pc_conv_output = self.encoder(self.pc_input, reuse=True)
+      # pc conv layers
+      pc_conv_output = self.encoder(self.pc_input, reuse=True)
 
-    if self._use_lstm:
-      # pc lstm layers
-      pc_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
-      # (Initial state is always reset.)
+      if self._use_lstm:
+        # pc lstm layers
+        pc_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
+        # (Initial state is always reset.)
 
-      pc_lstm_outputs, _ = self._base_lstm_layer(pc_conv_output,
-                                                 self.pc_last_action_reward_input,
-                                                 pc_initial_lstm_state,
-                                                 reuse=True)
+        pc_lstm_outputs, _ = self._base_lstm_layer(pc_conv_output,
+                                                   self.pc_last_action_reward_input,
+                                                   pc_initial_lstm_state,
+                                                   reuse=True)
 
-      self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_lstm_outputs)
-    else:
-      pc_fcn_outputs = self._base_fcn_layer(pc_conv_output, self.pc_last_action_reward_input, reuse=True)
-      self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_fcn_outputs)
+        self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_lstm_outputs)
+      else:
+        pc_fcn_outputs = self._base_fcn_layer(pc_conv_output, self.pc_last_action_reward_input, reuse=True)
+        self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_fcn_outputs)
 
     
   def _create_pc_network_for_display(self):
@@ -386,7 +388,7 @@ class UnrealModel(object):
     
   
   def _pc_deconv_layers(self, lstm_outputs, reuse=False):
-    with tf.variable_scope("pc_deconv", reuse=reuse) as scope:
+    with tf.name_scope("pc_deconv_layers") as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # (Spatial map was written as 7x7x32, but here 9x9x32 is used to get 20x20 deconv result?)
       # State (image input for pixel change)
@@ -421,46 +423,48 @@ class UnrealModel(object):
     
 
   def _create_vr_network(self):
-    # State (Image input)
-    self.vr_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3])
+    with tf.name_scope("vr_network") as scope:
+      # State (Image input)
+      self.vr_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3])
 
-    # Last action and reward and objective
-    self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
+      # Last action and reward and objective
+      self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1+self._objective_size])
 
-    # VR conv layers
-    vr_conv_output = self.encoder(self.vr_input, reuse=True)
+      # VR conv layers
+      vr_conv_output = self.encoder(self.vr_input, reuse=True)
 
-    if self._use_lstm:
-      # pc lstm layers
-      vr_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
-      # (Initial state is always reset.)
+      if self._use_lstm:
+        # pc lstm layers
+        vr_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
+        # (Initial state is always reset.)
 
-      vr_lstm_outputs, _ = self._base_lstm_layer(vr_conv_output,
-                                                 self.vr_last_action_reward_input,
-                                                 vr_initial_lstm_state,
-                                                 reuse=True)
-      # value output
-      self.vr_v  = self._base_value_layer(vr_lstm_outputs, reuse=True)
-    else:
-      vr_fcn_outputs = self._base_fcn_layer(vr_conv_output, self.vr_last_action_reward_input, reuse=True)
-      self.vr_v = self._base_value_layer(vr_fcn_outputs, reuse=True)
+        vr_lstm_outputs, _ = self._base_lstm_layer(vr_conv_output,
+                                                   self.vr_last_action_reward_input,
+                                                   vr_initial_lstm_state,
+                                                   reuse=True)
+        # value output
+        self.vr_v  = self._base_value_layer(vr_lstm_outputs, reuse=True)
+      else:
+        vr_fcn_outputs = self._base_fcn_layer(vr_conv_output, self.vr_last_action_reward_input, reuse=True)
+        self.vr_v = self._base_value_layer(vr_fcn_outputs, reuse=True)
 
     
   def _create_rp_network(self):
-    self.rp_input = tf.placeholder("float", [3, self._image_shape[0], self._image_shape[1], 3])
+    with tf.name_scope("rp_network") as scope:
+      self.rp_input = tf.placeholder("float", [3, self._image_shape[0], self._image_shape[1], 3])
 
-    # RP conv layers
-    rp_conv_output = self.encoder(self.rp_input, reuse=True)
-    rp_conv_output_ravel = np.prod(rp_conv_output.get_shape().as_list())
-    rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,rp_conv_output_ravel])
+      # RP conv layers
+      rp_conv_output = self.encoder(self.rp_input, reuse=True)
+      rp_conv_output_ravel = np.prod(rp_conv_output.get_shape().as_list())
+      rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,rp_conv_output_ravel])
 
-    with tf.variable_scope("rp_fc") as scope:
-      # Weights
-      W_fc1, b_fc1 = self._fc_variable([rp_conv_output_ravel, 3], "rp_fc1")
+      with tf.variable_scope("rp_fc") as scope:
+        # Weights
+        W_fc1, b_fc1 = self._fc_variable([rp_conv_output_ravel, 3], "rp_fc1")
 
-    # Reawrd prediction class output. (zero, positive, negative)
-    self.rp_c = tf.nn.softmax(tf.matmul(rp_conv_output_reshaped, W_fc1) + b_fc1)
-    # (1,3)
+      # Reawrd prediction class output. (zero, positive, negative)
+      self.rp_c = tf.nn.softmax(tf.matmul(rp_conv_output_reshaped, W_fc1) + b_fc1)
+      # (1,3)
 
   def _base_loss(self):
     # [base A3C]
@@ -474,21 +478,22 @@ class UnrealModel(object):
     log_pi = tf.log(tf.clip_by_value(self.base_pi, 1e-20, 1.0))
     
     # Policy entropy
-    entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
+    self.entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
     
     # Policy loss (output)
-    policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
+    self.policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
                                                  reduction_indices=1 ) *
-                                  self.base_adv + entropy * self._entropy_beta)
+                                  self.base_adv + self.entropy * self._entropy_beta)
     
     # R (input for value target)
     self.base_r = tf.placeholder("float", [None], name='base_r')
     
     # Value loss (output)
     # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-    value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
+    self.value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
 
-    base_loss = policy_loss + value_loss
+
+    self.base_loss = self.policy_loss + self.value_loss
     
     if self.segnet_mode >= 2:
       unrolled_logits = tf.reshape(self.base_dec_output, (-1, self.n_classes))
@@ -506,12 +511,12 @@ class UnrealModel(object):
       # CACLULATE LOSSES
       self.decoder_loss = tf.losses.sparse_softmax_cross_entropy(labels=unrolled_labels, logits=unrolled_logits, weights=label_weights,
                                            reduction="weighted_sum_by_nonzero_weights", scope="decoder_loss")
-      self.decoder_loss += tf.losses.get_regularization_loss(scope="net_{0}".format(self._thread_index))
+      self.regul_loss = tf.losses.get_regularization_loss(scope="net_{0}".format(self._thread_index))
+      self.decoder_loss += self.regul_loss
       # SUMS ALL LOSSES - even Regularization losses automatically
 
-      base_loss += self.decoder_loss
 
-    return base_loss
+    return self.base_loss, self.decoder_loss
 
   
   def _pc_loss(self):
@@ -551,10 +556,9 @@ class UnrealModel(object):
     
     
   def prepare_loss(self):
-    scope_name = "net_{0}".format(self._thread_index)
-    with tf.device(self._device), tf.variable_scope(scope_name):
-      self.base_loss = self._base_loss()
-      loss = self.base_loss
+    with tf.device(self._device):
+      base_loss, decoder_loss = self._base_loss()
+      loss = base_loss + decoder_loss
 
       if self._use_pixel_change:
         self.pc_loss = self._pc_loss()
@@ -570,7 +574,7 @@ class UnrealModel(object):
       
       self.total_loss = loss
 
-  def _create_evaluation_metric_ops(self):
+  def _create_mIoU_evaluation_metric_ops(self):
     # EVALUATION METRIC - IoU
     with tf.name_scope("evaluation") as scope:
       # Define the evaluation metric and update operations
@@ -578,6 +582,18 @@ class UnrealModel(object):
         tf.reshape(self.base_segm_mask, [-1]),
         tf.reshape(self.preds, [-1]),
         num_classes=self.n_classes,
+        name=scope)
+      # Isolate metric's running variables & create their initializer/reset op
+      evaluation_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=scope)
+      self.reset_evaluation_vars = tf.variables_initializer(var_list=evaluation_vars)
+
+  def dont_use_create_acc_evaluation_metric_ops(self):
+    # EVALUATION METRIC
+    with tf.name_scope("evaluation") as scope:
+      # Define the evaluation metric and update operations
+      self.evaluation, self.update_evaluation_vars = tf.metrics.accuracy(
+        labels=tf.reshape(self.base_segm_mask, [-1]),
+        predictions=tf.reshape(self.preds, [-1]),
         name=scope)
       # Isolate metric's running variables & create their initializer/reset op
       evaluation_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope=scope)
