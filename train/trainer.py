@@ -507,7 +507,7 @@ class Trainer(object):
     #print("Applying gradients in train!", flush=True)
     # Calculate gradients and copy them to global network.
     out_list = [self.apply_gradients]
-    out_list += [self.local_network.update_evaluation_vars, self.local_network.total_loss,
+    out_list += [self.local_network.total_loss,
                  self.local_network.base_loss, self.local_network.policy_loss,
                  self.local_network.value_loss, self.local_network.entropy]
     if self.segnet_mode >= 2:
@@ -519,8 +519,10 @@ class Trainer(object):
       out_list += [self.local_network.vr_loss]
     if self.use_reward_prediction:
       out_list += [self.local_network.rp_loss]
-    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
-      out_list += [self.local_network.evaluation]
+    if self.segnet_mode >= 2:
+      out_list += [self.local_network.update_evaluation_vars]
+      if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+        out_list += [self.local_network.evaluation]
 
     with tf.control_dependencies(grad_check):
       if GPU_LOG:
@@ -530,8 +532,8 @@ class Trainer(object):
         return_list = sess.run(out_list,
                   feed_dict=feed_dict, options=run_options)
 
-    _, _, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:7]
-    return_list = return_list[7:]
+    _, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:6]
+    return_list = return_list[6:]
     return_string = "Trainer {}>>> Total loss: {}, Base loss: {}\n".format(self.thread_index, total_loss, base_loss)
     return_string += "\t\tPolicy loss: {}, Value loss: {}, Entropy: {}\n".format(policy_loss, value_loss, entropy)
     losses_eval = {'total_loss_batch': total_loss, 'base_loss_batch': base_loss,
