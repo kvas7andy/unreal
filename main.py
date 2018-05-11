@@ -199,7 +199,9 @@ class Application(object):
                                       segnet_param_dict=segnet_param_dict,
                                       image_shape=self.image_shape,
                                       is_training=is_training,
-                                      n_classes = flags.n_classes)
+                                      n_classes=flags.n_classes,
+                                      segnet_lambda=flags.segnet_lambda,
+                                      dropout=flags.dropout)
     self.trainers = []
     
     learning_rate_input = tf.placeholder("float")
@@ -238,7 +240,9 @@ class Application(object):
                         is_training=is_training,
                         n_classes = flags.n_classes,
                         random_state=self.random_state,
-                        termination_time=flags.termination_time_sec)
+                        termination_time=flags.termination_time_sec,
+                        segnet_lambda=flags.segnet_lambda,
+                        dropout=flags.dropout)
       self.trainers.append(trainer)
     
     # prepare session
@@ -261,36 +265,39 @@ class Application(object):
     self.losses_input = {}
 
     self.total_loss = tf.placeholder(tf.float32,  name='total_loss')
-    self.losses_input.update({'total_loss_batch': self.total_loss})
+    self.losses_input.update({'all/total_loss': self.total_loss})
 
     self.base_loss = tf.placeholder(tf.float32, name='base_loss')
-    self.losses_input.update({'base_loss_batch': self.base_loss})
+    self.losses_input.update({'all/base_loss': self.base_loss})
 
     self.policy_loss = tf.placeholder(tf.float32,  name='policy_loss')
-    self.losses_input.update({'policy_loss_batch': self.policy_loss})
+    self.losses_input.update({'all/policy_loss': self.policy_loss})
 
     self.value_loss = tf.placeholder(tf.float32, name='policy_loss')
-    self.losses_input.update({'value_loss_batch': self.value_loss})
+    self.losses_input.update({'all/value_loss': self.value_loss})
+
+    self.grad_norm = tf.placeholder(tf.float32, name='grad_norm')
+    self.losses_input.update({'all/loss/grad_norm': self.grad_norm})
 
     self.entropy_input = tf.placeholder(tf.float32, shape=[None], name='entropy')
 
     if segnet_param_dict["segnet_mode"] >= 2:
       self.decoder_loss = tf.placeholder(tf.float32,  name='decoder_loss')
-      self.losses_input.update({'decoder_loss_batch': self.decoder_loss})
+      self.losses_input.update({'all/decoder_loss': self.decoder_loss})
       self.l2_weights_loss = tf.placeholder(tf.float32, name='regul_weights_loss')
-      self.losses_input.update({'l2_weights_loss_batch': self.l2_weights_loss})
+      self.losses_input.update({'all/l2_weights_loss': self.l2_weights_loss})
     if flags.use_pixel_change:
       self.pc_loss = tf.placeholder(tf.float32,  name='pc_loss')
-      self.losses_input.update({'pc_loss_batch': self.pc_loss})
+      self.losses_input.update({'all/pc_loss': self.pc_loss})
     if flags.use_value_replay:
       self.vr_loss = tf.placeholder(tf.float32,  name='vr_loss')
-      self.losses_input.update({'vr_loss_batch': self.vr_loss})
+      self.losses_input.update({'all/vr_loss': self.vr_loss})
     if flags.use_reward_prediction:
       self.rp_loss = tf.placeholder(tf.float32,  name='rp_loss')
-      self.losses_input.update({'rp_loss_batch': self.rp_loss})
+      self.losses_input.update({'all/rp_loss': self.rp_loss})
 
-    score_summary = tf.summary.scalar("score", self.score_input)
-    eval_summary = tf.summary.scalar("mIoU_all", self.mIoU_input)
+    score_summary = tf.summary.scalar("all/score", self.score_input)
+    eval_summary = tf.summary.scalar("all/eval/mIoU_all", self.mIoU_input)
     losses_summary_list = []
     for key, val in self.losses_input.items():
       losses_summary_list += [tf.summary.scalar(key, val)]

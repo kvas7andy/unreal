@@ -52,7 +52,9 @@ class Trainer(object):
                is_training,
                n_classes,
                random_state,
-               termination_time):
+               termination_time,
+               segnet_lambda,
+               dropout):
 
     self.thread_index = thread_index
     self.learning_rate_input = learning_rate_input
@@ -76,12 +78,14 @@ class Trainer(object):
 
     self.is_training = is_training
     self.n_classes = n_classes
+    self.segnet_lambda = segnet_lambda
 
     self.run_metadata = tf.RunMetadata()
     self.many_runs_timeline = TimeLiner()
 
     self.random_state = random_state
     self.termination_time = termination_time
+    self.dropout = dropout
 
     try:
       self.local_network = UnrealModel(self.action_size,
@@ -97,7 +101,9 @@ class Trainer(object):
                                        segnet_param_dict=self.segnet_param_dict ,
                                        image_shape=image_shape,
                                        is_training=is_training,
-                                       n_classes=n_classes)
+                                       n_classes=n_classes,
+                                       segnet_lambda=self.segnet_lambda,
+                                       dropout=dropout)
 
       self.local_network.prepare_loss()
 
@@ -179,6 +185,7 @@ class Trainer(object):
     action = self.choose_action(pi_)
     
     new_state, reward, terminal, pixel_change = self.environment.process(action)
+    reward /= self.termination_time # reward clipping
 
     frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
                             last_action, last_reward)
@@ -247,6 +254,7 @@ class Trainer(object):
 
       # Process game
       new_state, reward, terminal, pixel_change = self.environment.process(action)
+      reward /= self.termination_time
       frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
                               last_action, last_reward)
 
@@ -257,9 +265,7 @@ class Trainer(object):
       #print(self.experience.get_debug_string())
 
       self.episode_reward += reward
-
-      rewards.append( reward )
-
+      rewards.append(reward)
       self.local_t += 1
 
       if terminal:
@@ -457,7 +463,8 @@ class Trainer(object):
       self.local_network.base_adv: batch_adv,
       self.local_network.base_r: batch_R,
       # [common]
-      self.learning_rate_input: cur_learning_rate
+      self.learning_rate_input: cur_learning_rate,
+      self.is_training: True
     }
 
     if self.use_lstm:
@@ -500,9 +507,7 @@ class Trainer(object):
         self.local_network.rp_c_target: batch_rp_c
       }
       feed_dict.update(rp_feed_dict)
-      print(len(batch_rp_c), batch_rp_c)
-
-    feed_dict.update({self.is_training: True})
+      #print(len(batch_rp_c), batch_rp_c)
 
 
     grad_check = None
@@ -536,32 +541,34 @@ class Trainer(object):
         return_list = sess.run(out_list,
                   feed_dict=feed_dict, options=run_options)
 
-    _, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:6]
+    gradients_tuple, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:6]
+    grad_norm = gradients_tuple[1]
     return_list = return_list[6:]
     return_string = "Trainer {}>>> Total loss: {}, Base loss: {}\n".format(self.thread_index, total_loss, base_loss)
-    return_string += "\t\tPolicy loss: {}, Value loss: {}, Entropy: {}\n".format(policy_loss, value_loss, entropy)
-    losses_eval = {'total_loss_batch': total_loss, 'base_loss_batch': base_loss,
-                   'policy_loss_batch': policy_loss, 'value_loss_batch': value_loss}
+    return_string += "\t\tPolicy loss: {}, Value loss: {}, Grad norm: {}\nEntropy: {}\n".format(policy_loss, value_loss,
+                                                                                                grad_norm, entropy)
+    losses_eval = {'all/total_loss': total_loss, 'all/base_loss': base_loss,
+                   'all/policy_loss': policy_loss, 'all/value_loss': value_loss, 'all/loss/grad_norm': grad_norm}
     if self.segnet_mode >= 2:
       decoder_loss, l2_loss = return_list[:2]
       return_list = return_list[2:]
       return_string += "\t\tDecoder loss: {}, L2 weights loss: {}\n".format(decoder_loss, l2_loss)
-      losses_eval.update({'decoder_loss_batch': decoder_loss, 'l2_weights_loss_batch': l2_loss})
+      losses_eval.update({'all/decoder_loss': decoder_loss, 'all/l2_weights_loss': l2_loss})
     if self.use_pixel_change:
       pc_loss = return_list[0]
       return_list = return_list[1:]
       return_string += "\t\tPC loss: {}\n".format(pc_loss)
-      losses_eval.update({'pc_loss_batch': pc_loss})
+      losses_eval.update({'all/pc_loss': pc_loss})
     if self.use_value_replay:
       vr_loss = return_list[0]
       return_list = return_list[1:]
       return_string += "\t\tVR loss: {}\n".format(vr_loss)
-      losses_eval.update({'vr_loss_batch': vr_loss})
+      losses_eval.update({'all/vr_loss': vr_loss})
     if self.use_reward_prediction:
       rp_loss = return_list[0]
       return_list = return_list[1:]
       return_string += "\t\tRP loss: {}\n".format(rp_loss)
-      losses_eval.update({'rp_loss_batch': rp_loss})
+      losses_eval.update({'all/rp_loss': rp_loss})
     if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
       if self.segnet_mode >= 2:
         return_string += "\t\tmIoU: {}\n".format(return_list[-1])

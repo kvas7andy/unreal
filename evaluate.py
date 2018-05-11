@@ -49,6 +49,8 @@ class Evaluate(object):
                                       image_shape=self.image_shape,
                                       is_training=is_training,
                                       n_classes=flags.n_classes,
+                                      segnet_lambda=flags.segnet_lambda,
+                                      dropout=flags.dropout,
                                       for_display=True)
     self.environment = Environment.create_environment(flags.env_type, flags.env_name,
                                                       env_args={'episode_schedule': flags.split,

@@ -5,11 +5,26 @@ from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
+import tensorflow.contrib as contrib
+
+# USEFUL LAYERS
+fc = contrib.layers.fully_connected
+conv = contrib.layers.conv2d
+# convsep = contrib.layers.separable_conv2d
+deconv = contrib.layers.conv2d_transpose
+relu = tf.nn.relu
+maxpool = contrib.layers.max_pool2d
+dropout_layer = tf.layers.dropout
+batchnorm = contrib.layers.batch_norm
+winit = contrib.layers.xavier_initializer()
+repeat = contrib.layers.repeat
+arg_scope = contrib.framework.arg_scope
+l2_regularizer = contrib.layers.l2_regularizer
+
 from layers_object import conv_layer, up_sampling, max_pool, initialization, \
     variable_with_weight_decay
 import json
 
-from erfnet import *
 
 # weight initialization based on muupan's code
 # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
@@ -46,6 +61,8 @@ class UnrealModel(object):
                image_shape,
                is_training,
                n_classes,
+               segnet_lambda,
+               dropout,
                for_display=False):
     self._device = device
     self._action_size = action_size
@@ -61,6 +78,8 @@ class UnrealModel(object):
     self._image_shape = image_shape #[480,360] # [w, h]: Note much of network parameters are hard coded so if we change image shape, other parameters will need to change
 
     self.for_display = for_display
+    self.segnet_lambda = segnet_lambda
+    self.dropout = dropout
 
     self.num_classes = segnet_param_dict.get('num_classes', None)
     self.use_vgg = segnet_param_dict.get('use_vgg', None)
@@ -237,25 +256,25 @@ class UnrealModel(object):
         #with tf.name_scope("preprocess") as scope:
         #  x = tf.div(state_input, 255., name="rescaled_inputs")
         x = state_input
-        x = downsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="d1")
+        x = self.downsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="d1")
 
-        x = downsample(x, n_filters=64, is_training=self.is_training, l2=self.l2, name="d2")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres3")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres4")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres5")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres6")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres7")
+        x = self.downsample(x, n_filters=64, is_training=self.is_training, l2=self.l2, name="d2")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres3")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres4")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres5")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres6")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres7")
 
         # TODO: Use dilated convolutions
-        x = downsample(x, n_filters=128, is_training=self.is_training, l2=self.l2, name="d8")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres9")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres10")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres11")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres12")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres13")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres14")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres15")
-        x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres16")
+        x = self.downsample(x, n_filters=128, is_training=self.is_training, l2=self.l2, name="d8")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres9")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres10")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres11")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres12")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 2], l2=self.l2, name="fres13")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 4], l2=self.l2, name="fres14")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 8], l2=self.l2, name="fres15")
+        x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 16], l2=self.l2, name="fres16")
         return x
       else:
         # Weights
@@ -270,15 +289,15 @@ class UnrealModel(object):
 
   def decoder(self, layer_input, reuse=False, for_display=False, scope=""):
     with tf.variable_scope("base_decoder" + scope, reuse=reuse) as scope:
-      x = upsample(layer_input, n_filters=64, is_training=self.is_training, l2=self.l2, name="up17")
-      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres18")
-      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres19")
+      x = self.upsample(layer_input, n_filters=64, is_training=self.is_training, l2=self.l2, name="up17")
+      x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres18")
+      x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres19")
 
-      x = upsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="up20")
-      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres21")
-      x = factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres22")
+      x = self.upsample(x, n_filters=16, is_training=self.is_training, l2=self.l2, name="up20")
+      x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres21")
+      x = self.factorized_res_module(x, is_training=self.is_training, dilation=[1, 1], l2=self.l2, name="fres22")
 
-      x = upsample(x, n_filters=self.n_classes, is_training=self.is_training, l2=self.l2, name="up23")
+      x = self.upsample(x, n_filters=self.n_classes, is_training=self.is_training, l2=self.l2, name="up23")
       return x
 
   def _base_fcn_layer(self, conv_output, last_action_reward_objective_input,
@@ -514,6 +533,7 @@ class UnrealModel(object):
                                            reduction="weighted_sum_by_nonzero_weights", scope="decoder_loss")
       self.regul_loss = tf.losses.get_regularization_loss(scope="net_{0}".format(self._thread_index))
       self.decoder_loss += self.regul_loss
+      self.decoder_loss *= self.segnet_lambda
       # SUMS ALL LOSSES - even Regularization losses automatically
       decoder_loss = self.decoder_loss
 
@@ -798,3 +818,63 @@ class UnrealModel(object):
     return tf.nn.conv2d_transpose(x, W, output_shape,
                                   strides=[1, stride, stride, 1],
                                   padding='VALID')
+
+  def get_conv_arg_scope(self, is_training, bn=True, reg=None, use_deconv=False, use_relu=True, bn_decay=0.9):
+    with arg_scope(
+        [deconv if use_deconv else conv],
+        padding="SAME",
+        stride=1,
+        activation_fn=relu if use_relu else None,
+        normalizer_fn=batchnorm if bn else None,
+        normalizer_params={"is_training": is_training, "decay": bn_decay},
+        weights_regularizer=reg,
+        variables_collections=None,
+    ) as scope:
+      return scope
+
+  def factorized_res_moduleOLD(self, x, is_training, dropout=0.3, dilation=1, name="fres"):
+    with arg_scope(self.get_conv_arg_scope(is_training=is_training, bn=True)):
+      with tf.variable_scope(name):
+        n_filters = x.shape.as_list()[-1]
+        y = conv(x, num_outputs=n_filters, kernel_size=[3, 1], normalizer_fn=None, scope="conv_a_3x1")
+        y = conv(y, num_outputs=n_filters, kernel_size=[1, 3], scope="conv_a_1x3")
+        y = conv(y, num_outputs=n_filters, kernel_size=[3, 1], rate=dilation, normalizer_fn=None, scope="conv_b_3x1")
+        y = conv(y, num_outputs=n_filters, kernel_size=[1, 3], rate=dilation, scope="conv_b_1x3")
+        y = dropout_layer(y, rate=self.dropout)
+        y = tf.add(x, y, name="add")
+    # print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    return y
+
+  def factorized_res_module(self, x, is_training, dropout=0.3, dilation=[1, 1], l2=None, name="fres"):
+    reg = None if l2 is None else l2_regularizer(l2)
+    with arg_scope(self.get_conv_arg_scope(reg=reg, is_training=is_training, bn=True)):
+      with tf.variable_scope(name):
+        n_filters = x.shape.as_list()[-1]
+        y = conv(x, num_outputs=n_filters, kernel_size=[3, 1], rate=dilation[0], normalizer_fn=None, scope="conv_a_3x1")
+        y = conv(y, num_outputs=n_filters, kernel_size=[1, 3], rate=dilation[0], scope="conv_a_1x3")
+        y = conv(y, num_outputs=n_filters, kernel_size=[3, 1], rate=dilation[1], normalizer_fn=None, scope="conv_b_3x1")
+        y = conv(y, num_outputs=n_filters, kernel_size=[1, 3], rate=dilation[1], scope="conv_b_1x3")
+        y = dropout_layer(y, rate=self.dropout)
+        y = tf.add(x, y, name="add")
+    # print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    # print("DEBUG: L2 in factorized res module {}".format(l2))
+    return y
+
+  def downsample(self, x, n_filters, is_training, bn=False, use_relu=False, l2=None, name="down"):
+    with tf.variable_scope(name):
+      reg = None if l2 is None else l2_regularizer(l2)
+      with arg_scope(self.get_conv_arg_scope(reg=reg, is_training=is_training, bn=bn, use_relu=use_relu)):
+        n_filters_in = x.shape.as_list()[-1]
+        n_filters_conv = n_filters - n_filters_in
+        branch_a = conv(x, num_outputs=n_filters_conv, kernel_size=3, stride=2, scope="conv")
+        branch_b = maxpool(x, kernel_size=2, stride=2, padding='VALID', scope="maxpool")
+        y = tf.concat([branch_a, branch_b], axis=-1, name="concat")
+    # print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    return y
+
+  def upsample(self, x, n_filters, is_training=False, use_relu=False, bn=False, l2=None, name="up"):
+    reg = None if l2 is None else l2_regularizer(l2)
+    with arg_scope(self.get_conv_arg_scope(reg=reg, is_training=is_training, bn=bn, use_deconv=True, use_relu=use_relu)):
+      y = deconv(x, num_outputs=n_filters, kernel_size=4, stride=2, scope=name)
+    # print("DEBUG: {} {}".format(name, y.shape.as_list()))
+    return y

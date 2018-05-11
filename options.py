@@ -31,12 +31,14 @@ def get_options(option_type):
   tf.app.flags.DEFINE_integer("n_classes", 9, "segmentation classes")
   tf.app.flags.DEFINE_float("termination_time_sec", 50.0, "seconds until termination (steps/10)")
 
+  tf.app.flags.DEFINE_float("segnet_lambda", 2.0, "weighting of segmentation network loss")
+  tf.app.flags.DEFINE_float("dropout", 0.3, "dropout for encoder")
 
   # For training
   if option_type == 'training':
     tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
-    tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
+    tf.app.flags.DEFINE_integer("local_t_max", 100, "repeat step size")
+    tf.app.flags.DEFINE_integer("n_step_TD", 100, "size n for n-step TD")
     tf.app.flags.DEFINE_float("greedy_epsilon", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")

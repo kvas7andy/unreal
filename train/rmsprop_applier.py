@@ -118,7 +118,7 @@ class RMSPropApplier(object):
       print("Slots: rmsprop created", flush=True)
 
       # global gradient norm clipping
-      local_grad_list, _ =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
+      local_grad_list, global_grad_norm =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
 
       with tf.control_dependencies(update_ops):
         with tf.name_scope(name, self._name, []) as name:
@@ -126,7 +126,7 @@ class RMSPropApplier(object):
           for var, grad in zip(global_var_list, local_grad_list):
             with tf.name_scope("update_" + var.op.name), tf.device(var.device):
               update_ops.append(self._apply_dense(grad, var))
-          return tf.group(*update_ops, name=name)
+          return tf.group(*update_ops, name=name), global_grad_norm
     except Exception as e:
       print("Erro: ", str(e), flush=True)
       raise Exception
