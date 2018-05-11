@@ -320,7 +320,7 @@ class Application(object):
       # set global step
       self.global_t = int(tokens[1])
       for i in range(flags.parallel_size):
-        self.trainer[i].local_t = self.global_t
+        self.trainers[i].local_t = self.global_t
       print(">>> global step set: ", self.global_t)
       # set wall time
       wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
