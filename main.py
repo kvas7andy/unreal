@@ -142,6 +142,8 @@ class Application(object):
     if USE_GPU:
       device = "/gpu:0"
 
+    self.print_flags_info()
+
     if flags.segnet == -1:
       with open(flags.segnet_config) as f:
         self.config = json.load(f)
@@ -235,7 +237,8 @@ class Application(object):
                         image_shape=self.image_shape,
                         is_training=is_training,
                         n_classes = flags.n_classes,
-                        random_state=self.random_state)
+                        random_state=self.random_state,
+                        termination_time=flags.termination_time_sec)
       self.trainers.append(trainer)
     
     # prepare session
@@ -390,6 +393,30 @@ class Application(object):
   def signal_handler(self, signal, frame):
     print('You pressed Ctrl+C!', flush=True)
     self.terminate_requested = True
+
+  def print_flags_info(self):
+    return_string = ""
+    return_string += "Envs FILE:{}\n".format(flags.env_name)
+    return_string += "Checkpoint dir: {}, Termination time in sec: " \
+                     "{}, Max steps to train: {:2.3E}, Parallel threads:{}".format(flags.checkpoint_dir,
+                                                                                   flags.termination_time_sec,
+                                                                                   flags.max_time_step,
+                                                                                   flags.parallel_size)
+    return_string += "Use ErfNet Encoder-Decoder, N classes: {}\n".format(flags.n_classes) if flags.segnet >= 2 else ""
+    return_string += "Use ErfNet Encoder only\n" if flags.segnet == 1 else ""
+    return_string += "Use vanilla encoder\n" if flags.segnet == 0 else ""
+    return_string += "Use VR:{}, use RP:{}, use PC:{}\n".format(flags.use_pixel_change,
+                                                              flags.use_value_replay,
+                                                              flags.use_reward_prediction)
+    return_string += "Experience hist size: {}, Local_t: {}, n-step-TD: {}\n".format(flags.experience_history_size,
+                                                                                   flags.local_t_max,
+                                                                                   flags.n_step_TD)
+    return_string += "Entropy beta: {}, Gradient norm clipping: {}, Rmsprop alpha: {}, Saving step: {}\n".format(
+                                                                                     flags.entropy_beta,
+                                                                                     flags.grad_norm_clip,
+                                                                                     flags.rmsp_alpha,
+                                                                                     flags.save_interval_step)
+    print(return_string)
 
 def main(argv):
   app = Application()

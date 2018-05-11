@@ -51,7 +51,8 @@ class Trainer(object):
                image_shape,
                is_training,
                n_classes,
-               random_state):
+               random_state,
+               termination_time):
 
     self.thread_index = thread_index
     self.learning_rate_input = learning_rate_input
@@ -80,6 +81,7 @@ class Trainer(object):
     self.many_runs_timeline = TimeLiner()
 
     self.random_state = random_state
+    self.termination_time = termination_time
 
     try:
       self.local_network = UnrealModel(self.action_size,
@@ -115,9 +117,9 @@ class Trainer(object):
       print(str(e), flush=True)
       raise Exception("Problem in Trainer {} initialization".format(thread_index))
 
-  def prepare(self):
+  def prepare(self, termination_time=50.0, termination_dist_value=-10.0):
     self.environment = Environment.create_environment(self.env_type,
-                                                      self.env_name,
+                                                      self.env_name, self.termination_time,
                                                       thread_index=self.thread_index)
 
   def stop(self):
@@ -498,7 +500,9 @@ class Trainer(object):
         self.local_network.rp_c_target: batch_rp_c
       }
       feed_dict.update(rp_feed_dict)
-      feed_dict.update({self.is_training: True})
+      print(len(batch_rp_c), batch_rp_c)
+
+    feed_dict.update({self.is_training: True})
 
 
     grad_check = None
@@ -568,9 +572,9 @@ class Trainer(object):
     if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
       if self.segnet_mode >= 2:
         self._record_one(sess, summary_writer, summary_op_dict['eval_input'], eval_input,
-                         return_list[-1], global_t)
+                         return_list[-1], self.local_t)
       self._record_one(sess, summary_writer, summary_op_dict['entropy'], entropy_input,
-                       entropy, global_t)
+                       entropy, self.local_t)
       summary_writer.flush()
       print(return_string)
       self.prev_local_t_loss += LOSS_AND_EVAL_LOG_INTERVAL
@@ -584,7 +588,7 @@ class Trainer(object):
 
     #Recording score and losses
     self._record_all(sess, summary_writer, summary_op_dict['losses_input'], summary_dict['placeholders'],
-                     summary_dict['values'], global_t)
+                     summary_dict['values'], self.local_t)
     
     # Return advanced local step size
     diff_local_t = self.local_t - start_local_t

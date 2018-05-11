@@ -28,7 +28,7 @@ class IndoorEnvironment(environment.Environment):
     simargs = sim_config.get(env_name)
     return simargs.get('objective_size', 0)
 
-  def __init__(self, env_name, env_args, thread_index):
+  def __init__(self, env_name, env_args, termination_time, thread_index):
     environment.Environment.__init__(self)
     
     self.last_state = None
@@ -46,6 +46,8 @@ class IndoorEnvironment(environment.Environment):
     # Merge in extra env args
     if env_args is not None:
       simargs.update(env_args)
+
+    simargs["measure_fun"].termination_time = termination_time
 
     # try:
     self._sim = RoomSimulator(simargs)

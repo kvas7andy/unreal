@@ -27,7 +27,7 @@ class Environment(object):
     Environment.LOG_DIR = dir
 
   @staticmethod
-  def create_environment(env_type, env_name, env_args=None, thread_index=0):
+  def create_environment(env_type, env_name, termination_time=-50.0, env_args=None, thread_index=0):
     if env_type == 'maze':
       from . import maze_environment
       return maze_environment.MazeEnvironment()
@@ -36,7 +36,7 @@ class Environment(object):
       return lab_environment.LabEnvironment(env_name)
     elif env_type == 'indoor':
       from . import indoor_environment
-      return indoor_environment.IndoorEnvironment(env_name, env_args, thread_index)
+      return indoor_environment.IndoorEnvironment(env_name, env_args, termination_time, thread_index)
     else:
       from . import gym_environment
       return gym_environment.GymEnvironment(env_name)
