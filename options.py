@@ -37,8 +37,8 @@ def get_options(option_type):
   # For training
   if option_type == 'training':
     tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
-    tf.app.flags.DEFINE_integer("local_t_max", 100, "repeat step size")
-    tf.app.flags.DEFINE_integer("n_step_TD", 100, "size n for n-step TD")
+    tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
+    tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
     tf.app.flags.DEFINE_float("greedy_epsilon", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")

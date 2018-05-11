@@ -186,7 +186,8 @@ class Trainer(object):
     
     new_state, reward, terminal, pixel_change = self.environment.process(action)
 
-    frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
+    frame = ExperienceFrame({key: val for key, val in prev_state.items() if 'objectType' not in key},
+                            reward, action, terminal, pixel_change,
                             last_action, last_reward)
     self.experience.add_frame(frame)
     
@@ -253,7 +254,7 @@ class Trainer(object):
 
       # Process game
       new_state, reward, terminal, pixel_change = self.environment.process(action)
-      frame = ExperienceFrame({key: val for key, val in prev_state if 'objectType' not in key},
+      frame = ExperienceFrame({key: val for key, val in prev_state.items() if 'objectType' not in key},
                               reward, action, terminal, pixel_change,
                               last_action, last_reward)
 
