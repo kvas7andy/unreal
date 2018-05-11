@@ -49,6 +49,8 @@ class IndoorEnvironment(environment.Environment):
 
     simargs["measure_fun"].termination_time = termination_time
 
+    self.termination_time = termination_time
+
     # try:
     self._sim = RoomSimulator(simargs)
     self._sim_obs_space = self._sim.get_observation_space(simargs['outputs'])
@@ -108,7 +110,7 @@ class IndoorEnvironment(environment.Environment):
     #print("Step made")
     self._last_full_state = full_state  # Last observed state
     obs = full_state['observation']['sensors']['color']['data']
-    reward = full_state['rewards']
+    reward = full_state['rewards'] / self.termination_time # reward clipping
     terminal = full_state['terminals']
     objective = full_state.get('measurements')
     object_type = self._last_full_state["observation"]["sensors"].get("objectType", None)
@@ -123,7 +125,9 @@ class IndoorEnvironment(environment.Environment):
     else:
       state = self.last_state
 
-    pixel_change = self._calc_pixel_change(state['image'], self.last_state['image'])
+    pixel_change = None
+    if object_type is not None:
+      pixel_change = self._calc_pixel_change(state['image'], self.last_state['image'])
 
     self.prev_state = self.last_state
     self.prev_action = self.last_action

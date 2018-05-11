@@ -185,7 +185,6 @@ class Trainer(object):
     action = self.choose_action(pi_)
     
     new_state, reward, terminal, pixel_change = self.environment.process(action)
-    reward /= self.termination_time # reward clipping
 
     frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
                             last_action, last_reward)
@@ -254,8 +253,8 @@ class Trainer(object):
 
       # Process game
       new_state, reward, terminal, pixel_change = self.environment.process(action)
-      reward /= self.termination_time
-      frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
+      frame = ExperienceFrame({key: val for key, val in prev_state if 'objectType' not in key},
+                              reward, action, terminal, pixel_change,
                               last_action, last_reward)
 
       # Store to experience

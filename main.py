@@ -407,7 +407,7 @@ class Application(object):
     return_string = ""
     return_string += "Envs FILE:{}\n".format(flags.env_name)
     return_string += "Checkpoint dir: {}, Termination time in sec: " \
-                     "{}, Max steps to train: {:2.3E}, Parallel threads:{}".format(flags.checkpoint_dir,
+                     "{}, Max steps to train: {:2.3E}, Parallel threads:{}\n".format(flags.checkpoint_dir,
                                                                                    flags.termination_time_sec,
                                                                                    flags.max_time_step,
                                                                                    flags.parallel_size)
