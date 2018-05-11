@@ -405,7 +405,7 @@ class Application(object):
     return_string += "Use ErfNet Encoder-Decoder, N classes: {}\n".format(flags.n_classes) if flags.segnet >= 2 else ""
     return_string += "Use ErfNet Encoder only\n" if flags.segnet == 1 else ""
     return_string += "Use vanilla encoder\n" if flags.segnet == 0 else ""
-    return_string += "Use VR:{}, use RP:{}, use PC:{}\n".format(flags.use_pixel_change,
+    return_string += "Use PC:{}, Use VR:{}, use RP:{}\n".format(flags.use_pixel_change,
                                                               flags.use_value_replay,
                                                               flags.use_reward_prediction)
     return_string += "Experience hist size: {}, Local_t: {}, n-step-TD: {}\n".format(flags.experience_history_size,
