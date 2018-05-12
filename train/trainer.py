@@ -143,7 +143,7 @@ class Trainer(object):
 
   
   def _record_one(self, sess, summary_writer, summary_op, score_input, score, global_t):
-    if self.thread_index == 0:
+    if self.thread_index >= 0:
       summary_str = sess.run(summary_op, feed_dict={
         score_input: score
       })
@@ -151,7 +151,7 @@ class Trainer(object):
 
   def _record_all(self, sess, summary_writer, summary_op,
                     dict_input, dict_eval, global_t):
-    if self.thread_index == 0:
+    if self.thread_index >= 0:
       assert set(dict_input.keys()) == set(dict_eval.keys()), print(dict_input.keys(), dict_eval.keys())
 
       feed_dict = {}
@@ -453,7 +453,7 @@ class Trainer(object):
                              summary_dict)
     if summary_dict['values'].get('score_input', None) is not None:
       self._record_one(sess, summary_writer, summary_op_dict['score_input'], score_input,
-                       summary_dict['values']['score_input'], global_t)
+                       summary_dict['values']['score_input'], self.local_t)
       summary_writer.flush()
       summary_dict['values'] = {}
 

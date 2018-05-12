@@ -106,7 +106,7 @@ class Application(object):
       try:
         diff_global_t = trainer.process(self.sess,
                                         self.global_t,
-                                        self.summary_writer,
+                                        self.summary_writer[parallel_index],
                                         self.summary_op_dict,
                                         self.score_input,
                                         self.mIoU_input,
@@ -306,8 +306,8 @@ class Application(object):
     self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary,
                             'losses_input': tf.summary.merge(losses_summary_list),
                             'entropy': tf.summary.histogram('entropy_stepTD', self.entropy_input)}
-    self.summary_writer = tf.summary.FileWriter(flags.log_dir,
-                                                self.sess.graph)
+    self.summary_writer = [tf.summary.FileWriter(os.path.join(flags.log_dir, 'worker_{}'.format(i)),
+                                                self.sess.graph) for i in range(flags.parallel_size)]
     
     # init or load checkpoint with saver
     self.saver = tf.train.Saver(self.global_network.get_global_vars(), max_to_keep=20)
