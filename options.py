@@ -31,7 +31,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_integer("n_classes", 9, "segmentation classes")
   tf.app.flags.DEFINE_float("termination_time_sec", 50.0, "seconds until termination (steps/10)")
 
-  tf.app.flags.DEFINE_float("segnet_lambda", 2.0, "weighting of segmentation network loss")
+  tf.app.flags.DEFINE_float("segnet_lambda", 1.0, "weighting of segmentation network loss")
   tf.app.flags.DEFINE_float("dropout", 0.3, "dropout for encoder")
 
   # For training
