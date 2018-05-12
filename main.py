@@ -111,6 +111,7 @@ class Application(object):
                                         self.score_input,
                                         self.mIoU_input,
                                         self.entropy_input,
+                                        self.term_global_t,
                                         self.losses_input)
 
         self.global_t += diff_global_t
@@ -261,6 +262,7 @@ class Application(object):
     # summary for tensorboard
     self.score_input = tf.placeholder(tf.float32)
     self.mIoU_input = tf.placeholder(tf.float32)
+    self.term_global_t = tf.placeholder(tf.int32)
 
     self.losses_input = {}
 
@@ -296,7 +298,8 @@ class Application(object):
       self.rp_loss = tf.placeholder(tf.float32,  name='rp_loss')
       self.losses_input.update({'all/rp_loss': self.rp_loss})
 
-    score_summary = tf.summary.scalar("all/score", self.score_input)
+    score_summary = tf.summary.scalar("all/eval/score", self.score_input)
+    term_summary = tf.summary.scalar("all/eval/term_global_t", self.term_global_t)
     eval_summary = tf.summary.scalar("all/eval/mIoU_all", self.mIoU_input)
     losses_summary_list = []
     for key, val in self.losses_input.items():
@@ -305,7 +308,8 @@ class Application(object):
 
     self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary,
                             'losses_input': tf.summary.merge(losses_summary_list),
-                            'entropy': tf.summary.histogram('entropy_stepTD', self.entropy_input)}
+                            'entropy': tf.summary.scalar('entropy_stepTD', tf.reduce_mean(self.entropy_input)),
+                            'term_global_t': term_summary}
     self.summary_writer = [tf.summary.FileWriter(os.path.join(flags.log_dir, 'worker_{}'.format(i)),
                                                 self.sess.graph) for i in range(flags.parallel_size)]
     

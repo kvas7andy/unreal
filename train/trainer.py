@@ -420,7 +420,7 @@ class Trainer(object):
     return batch_rp_si, batch_rp_c
 
   def process(self, sess, global_t, summary_writer, summary_op_dict,
-              score_input, eval_input, entropy_input, losses_input):
+              score_input, eval_input, entropy_input, term_global_t, losses_input):
 
     if self.prev_local_t == 0 and self.segnet_mode >= 2:
       self.prev_local_t = self.local_t
@@ -453,7 +453,9 @@ class Trainer(object):
                              summary_dict)
     if summary_dict['values'].get('score_input', None) is not None:
       self._record_one(sess, summary_writer, summary_op_dict['score_input'], score_input,
-                       summary_dict['values']['score_input'], self.local_t)
+                       summary_dict['values']['score_input'], self.global_t)
+      self._record_one(sess, summary_writer, summary_op_dict['term_global_t'], term_global_t,
+                       self.global_t, self.global_t)
       summary_writer.flush()
       summary_dict['values'] = {}
 
@@ -580,9 +582,9 @@ class Trainer(object):
     if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
       if self.segnet_mode >= 2:
         self._record_one(sess, summary_writer, summary_op_dict['eval_input'], eval_input,
-                         return_list[-1], self.local_t)
+                         return_list[-1], global_t)
       self._record_one(sess, summary_writer, summary_op_dict['entropy'], entropy_input,
-                       entropy, self.local_t)
+                       entropy, global_t)
       summary_writer.flush()
       print(return_string)
       self.prev_local_t_loss += LOSS_AND_EVAL_LOG_INTERVAL
@@ -596,7 +598,7 @@ class Trainer(object):
 
     #Recording score and losses
     self._record_all(sess, summary_writer, summary_op_dict['losses_input'], summary_dict['placeholders'],
-                     summary_dict['values'], self.local_t)
+                     summary_dict['values'], global_t)
     
     # Return advanced local step size
     diff_local_t = self.local_t - start_local_t
