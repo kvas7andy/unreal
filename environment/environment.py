@@ -27,7 +27,7 @@ class Environment(object):
     Environment.LOG_DIR = dir
 
   @staticmethod
-  def create_environment(env_type, env_name, termination_time=-50.0, env_args=None, thread_index=0):
+  def create_environment(env_type, env_name, termination_time=50.0, env_args=None, thread_index=0):
     if env_type == 'maze':
       from . import maze_environment
       return maze_environment.MazeEnvironment()

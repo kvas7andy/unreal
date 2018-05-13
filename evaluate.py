@@ -55,7 +55,7 @@ class Evaluate(object):
                                       segnet_lambda=flags.segnet_lambda,
                                       dropout=flags.dropout,
                                       for_display=True)
-    self.environment = Environment.create_environment(flags.env_type, flags.env_name,
+    self.environment = Environment.create_environment(flags.env_type, flags.env_name, flags.termination_time_sec,
                                                       env_args={'episode_schedule': flags.split,
                                                                 'log_action_trace': flags.log_action_trace,
                                                                 'max_states_per_scene': flags.episodes_per_scene,
@@ -86,7 +86,7 @@ class Evaluate(object):
 
   def process(self, sess):
     last_action = self.environment.last_action
-    last_reward = np.clip(self.environment.last_reward, -1, 1)
+    last_reward = self.environment.last_reward
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action, self.action_size,
                                                                   last_reward, self.environment.last_state)
     mode = "segnet" if flags.segnet >= 2 else ""

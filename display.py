@@ -253,7 +253,7 @@ class Display(object):
     #sess.run(tf.initialize_all_variables())
 
     last_action = self.environment.last_action
-    last_reward = np.clip(self.environment.last_reward, -1, 1)
+    last_reward = self.environment.last_reward
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action, self.action_size,
                                                                   last_reward, self.environment.last_state)
     
