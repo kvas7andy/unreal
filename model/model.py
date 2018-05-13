@@ -407,7 +407,7 @@ class UnrealModel(object):
     
   
   def _pc_deconv_layers(self, lstm_outputs, reuse=False):
-    with tf.name_scope("pc_deconv_layers") as scope:
+    with tf.variable_scope("pc_deconv_layers", reuse=reuse) as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # (Spatial map was written as 7x7x32, but here 9x9x32 is used to get 20x20 deconv result?)
       # State (image input for pixel change)

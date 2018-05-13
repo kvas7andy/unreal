@@ -20,6 +20,9 @@ import minos.config.sim_config as sim_config
 flags = get_options("evaluate")
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
+if flags.segnet >= 1:
+  flags.use_pixel_change = False
+
 USE_GPU = False
 device = "/cpu:0"
 if USE_GPU:
