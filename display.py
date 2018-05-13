@@ -339,18 +339,18 @@ def main(args):
     display_size = (440, 400)
     display = Display(display_size)
     saver = tf.train.Saver()
-    #checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
-    #if checkpoint and checkpoint.model_checkpoint_path:
-    #  saver.restore(sess, checkpoint.model_checkpoint_path)
-    #  print("checkpoint loaded:", checkpoint.model_checkpoint_path)
-    #else:
-    #  print("Could not find old checkpoint")
-    checkpoint_file = tf.train.latest_checkpoint(flags.checkpoint_dir)
-    print(checkpoint_file)
-    if checkpoint_file is None:
-      pass
+    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    if checkpoint and checkpoint.model_checkpoint_path:
+     saver.restore(sess, checkpoint.model_checkpoint_path)
+     print("checkpoint loaded:", checkpoint.model_checkpoint_path)
     else:
-      saver.restore(sess, checkpoint_file)
+     print("Could not find old checkpoint")
+    # checkpoint_file = tf.train.latest_checkpoint(flags.checkpoint_dir)
+    # print(checkpoint_file)
+    # if checkpoint_file is None:
+    #   pass
+    # else:
+    #   saver.restore(sess, checkpoint_file)
 
     clock = pygame.time.Clock()
 
