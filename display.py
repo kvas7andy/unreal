@@ -321,7 +321,7 @@ class Display(object):
     ind_col = self.label_mapping[["index", "color"]].values
     index = ind_col[:, 0].astype(np.int)
     self.index, ind = np.unique(index, return_index=True)
-    self.col = np.array([map(lambda x: int(x), col.split('_')) for col in ind_col[ind, 2]])
+    self.col = np.array([map(lambda x: int(x), col.split('_')) for col in ind_col[ind, 1]])
 
   def label_to_rgb(self, labels):
     rgb_img = self.col[np.where(self.index[np.newaxis, :] == labels.ravel()[:, np.newaxis])[1]]
