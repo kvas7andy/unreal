@@ -123,6 +123,8 @@ class Trainer(object):
       print(str(e), flush=True)
       raise Exception("Problem in Trainer {} initialization".format(thread_index))
 
+
+
   def prepare(self, termination_time=50.0, termination_dist_value=-10.0):
     self.environment = Environment.create_environment(self.env_type,
                                                       self.env_name, self.termination_time,

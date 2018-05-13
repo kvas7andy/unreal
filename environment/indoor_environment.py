@@ -30,34 +30,34 @@ class IndoorEnvironment(environment.Environment):
 
   def __init__(self, env_name, env_args, termination_time, thread_index):
     environment.Environment.__init__(self)
-    
-    self.last_state = None
-    self.last_action = 0
-    self.last_reward = 0
+    try:
+      self.last_state = None
+      self.last_action = 0
+      self.last_reward = 0
 
-    self.prev_state = None
-    self.prev_action = 0
-    self.prev_reward = 0
+      self.prev_state = None
+      self.prev_action = 0
+      self.prev_reward = 0
 
-    simargs = sim_config.get(env_name)
-    simargs['id'] = 'sim%02d' % thread_index
-    simargs['logdir'] = os.path.join(IndoorEnvironment.get_log_dir(), simargs['id'])
+      simargs = sim_config.get(env_name)
+      simargs['id'] = 'sim%02d' % thread_index
+      simargs['logdir'] = os.path.join(IndoorEnvironment.get_log_dir(), simargs['id'])
 
-    # Merge in extra env args
-    if env_args is not None:
-      simargs.update(env_args)
+      # Merge in extra env args
+      if env_args is not None:
+        simargs.update(env_args)
 
-    simargs["measure_fun"].termination_time = termination_time
+      simargs["measure_fun"].termination_time = termination_time
 
-    self.termination_time = termination_time
+      self.termination_time = termination_time
 
-    # try:
-    self._sim = RoomSimulator(simargs)
-    self._sim_obs_space = self._sim.get_observation_space(simargs['outputs'])
-    self.reset()
-    # except Exception as e:
-    #   print("Error:", str(e), flush=True)
-    #   raise Exception
+      # try:
+      self._sim = RoomSimulator(simargs)
+      self._sim_obs_space = self._sim.get_observation_space(simargs['outputs'])
+      self.reset()
+    except Exception as e:
+      print("Error in indoor_env init():", str(e), flush=True)
+      raise Exception
 
 
   def reset(self):
