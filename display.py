@@ -194,7 +194,7 @@ class Display(object):
     """
     state_ = state * 255.0
     data = state_.astype(np.uint8)
-    image = pygame.image.frombuffer(data, (84,84), 'RGB')
+    image = pygame.image.frombuffer(data, self.image_shape[:2], 'RGB')
     self.surface.blit(image, (8, 8))
     self.draw_center_text("input", 50, 100)
 
