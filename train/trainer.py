@@ -453,9 +453,9 @@ class Trainer(object):
                              summary_dict)
     if summary_dict['values'].get('score_input', None) is not None:
       self._record_one(sess, summary_writer, summary_op_dict['score_input'], score_input,
-                       summary_dict['values']['score_input'], self.global_t)
+                       summary_dict['values']['score_input'], global_t)
       self._record_one(sess, summary_writer, summary_op_dict['term_global_t'], term_global_t,
-                       self.global_t, self.global_t)
+                       global_t, global_t)
       summary_writer.flush()
       summary_dict['values'] = {}
 
