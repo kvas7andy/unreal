@@ -33,12 +33,13 @@ def get_options(option_type):
 
   tf.app.flags.DEFINE_float("segnet_lambda", 1.0, "weighting of segmentation network loss")
   tf.app.flags.DEFINE_float("dropout", 0.3, "dropout for encoder")
+  tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
+  tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
+  tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
+  tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regularization constant")
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
-    tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
     tf.app.flags.DEFINE_float("greedy_epsilon", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
@@ -51,7 +52,6 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
-    tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regularization constant")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.05, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_integer("experience_history_size", 2000, "experience replay buffer size") # 2000
     tf.app.flags.DEFINE_integer("max_time_step", int(13.2 * 10**6), "max time steps")
