@@ -11,11 +11,13 @@ from collections import deque
 import pygame
 
 import traceback
+import pandas as pd
 
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import ExperienceFrame
 from options import get_options
+import minos.config.sim_config as sim_config
 
 BLUE  = (128, 128, 255)
 RED   = (255, 192, 192)
@@ -25,6 +27,9 @@ WHITE = (255, 255, 255)
 
 # get command line args
 flags = get_options("display")
+
+if flags.segnet >= 1:
+  flags.use_pixel_change = False
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
 
@@ -88,7 +93,16 @@ class Display(object):
     pygame.init()
     
     self.surface = pygame.display.set_mode(display_size, 0, 24)
-    pygame.display.set_caption('UNREAL')
+    name = 'UNREAL' if flags.segnet == 0 else "A3C ErfNet"
+    pygame.display.set_caption(name)
+
+    env_config = sim_config.get(flags.env_name)
+    self.image_shape = [env_config.get('height', 88), env_config.get('width', 88)]
+    segnet_param_dict = {'segnet_mode': flags.segnet}
+    is_training = tf.placeholder(tf.bool, name="training")
+    map_file = env_config.get('objecttypes_file', '../../objectTypes.csv')
+    self.label_mapping = pd.read_csv(map_file, sep=',', header=0)
+    self.get_col_index()
 
     self.action_size = Environment.get_action_size(flags.env_type, flags.env_name)
     self.objective_size = Environment.get_objective_size(flags.env_type, flags.env_name)
@@ -102,8 +116,14 @@ class Display(object):
                                       0.0,
                                       0.0,
                                       "/gpu:0",
+                                      segnet_param_dict=segnet_param_dict,
+                                      image_shape=self.image_shape,
+                                      is_training=is_training,
+                                      n_classes=flags.n_classes,
+                                      segnet_lambda=flags.segnet_lambda,
+                                      dropout=flags.dropout,
                                       for_display=True)
-    self.environment = Environment.create_environment(flags.env_type, flags.env_name,
+    self.environment = Environment.create_environment(flags.env_type, flags.env_name, flags.termination_time_sec,
                                                       env_args={'episode_schedule': flags.split,
                                                                 'log_action_trace': flags.log_action_trace,
                                                                 'max_states_per_scene': flags.episodes_per_scene,
@@ -141,15 +161,15 @@ class Display(object):
   def show_pixel_change(self, pixel_change, left, top, rate, label):
     """
     Show pixel change
-    """    
-    pixel_change_ = np.clip(pixel_change * 255.0 * rate, 0.0, 255.0)
-    data = pixel_change_.astype(np.uint8)
-    data = np.stack([data for _ in range(3)], axis=2)
-    data = self.scale_image(data, 4)
-    if label == "PC":
-      image = pygame.image.frombuffer(data, (476, 356), 'RGB')
-    else:
+    """
+    if "PC" in label:
+      pixel_change_ = np.clip(pixel_change * 255.0 * rate, 0.0, 255.0)
+      data = pixel_change_.astype(np.uint8)
+      data = np.stack([data for _ in range(3)], axis=2)
+      data = self.scale_image(data, 4)
       image = pygame.image.frombuffer(data, (80, 80), 'RGB')
+    else:
+      image = pygame.image.frombuffer(pixel_change, self.image_shape[:2], 'RGB')
     self.surface.blit(image, (left+8+4, top+8+4))
     self.draw_center_text(label, left + 100/2, top + 100)
     
@@ -174,8 +194,8 @@ class Display(object):
     """
     state_ = state * 255.0
     data = state_.astype(np.uint8)
-    image = pygame.image.frombuffer(data, (480,360), 'RGB')
-    self.surface.blit(image, (8, 6))
+    image = pygame.image.frombuffer(data, (84,84), 'RGB')
+    self.surface.blit(image, (8, 8))
     self.draw_center_text("input", 50, 100)
 
   def show_value(self):
@@ -249,16 +269,15 @@ class Display(object):
 
   def process(self, sess):
     sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
-
     #sess.run(tf.initialize_all_variables())
 
     last_action = self.environment.last_action
     last_reward = self.environment.last_reward
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action, self.action_size,
                                                                   last_reward, self.environment.last_state)
-    
+    preds=None
     if not flags.use_pixel_change:
-      pi_values, v_value, _ = self.global_network.run_base_policy_and_value(sess,
+      pi_values, v_value, preds = self.global_network.run_base_policy_and_value(sess,
                                                                          self.environment.last_state,
                                                                          last_action_reward)
     else:
@@ -280,7 +299,10 @@ class Display(object):
     self.show_value()
     self.show_reward()
     
-    if flags.use_pixel_change:
+    if not flags.use_pixel_change:
+      if preds is not None:
+        self.show_pixel_change(self.label_to_rgb(preds), 100, 0, 3.0, "Segm Mask")
+    else:
       self.show_pixel_change(pixel_change, 100, 0, 3.0, "PC")
       self.show_pixel_change(pc_q[:,:,action], 200, 0, 0.4, "PC Q")
   
@@ -295,13 +317,21 @@ class Display(object):
     data = self.surface.get_buffer().raw
     return data
 
+  def get_col_index(self):
+    ind_col = self.label_mapping[["index", "color"]].values
+    index = ind_col[:, 0].astype(np.int)
+    self.index, ind = np.unique(index, return_index=True)
+    self.col = np.array([map(lambda x: int(x), col.split('_')) for col in ind_col[ind, 2]])
+
+  def label_to_rgb(self, labels):
+    rgb_img = self.col[np.where(self.index[np.newaxis, :] == labels.ravel()[:, np.newaxis])[1]]
+    return rgb_img
+
 
 def main(args):
-
   # prepare session
   config = tf.ConfigProto(allow_soft_placement=True)
   # log_device_placement = False,
-
   config.gpu_options.allow_growth = True
 
   sess = tf.Session(config=config)

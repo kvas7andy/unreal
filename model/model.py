@@ -633,13 +633,14 @@ class UnrealModel(object):
     # so the step size is 1.
     if self._use_lstm:
       if "segnet" in mode:
-        pi_out, v_out, self.base_lstm_state_out = sess.run([self.base_pi, self.base_v, self.base_lstm_state],
+        pi_out, v_out, self.base_lstm_state_out, preds = sess.run([self.base_pi, self.base_v,
+                                                                   self.base_lstm_state, self.preds],
                                                            feed_dict={self.base_input: [s_t['image']],
                                                                       self.is_training: not self.for_display,
                                                                       self.base_last_action_reward_input: [last_action_reward],
                                                                       self.base_initial_lstm_state0: self.base_lstm_state_out[0],
                                                                       self.base_initial_lstm_state1: self.base_lstm_state_out[1]})
-        return (pi_out[0], v_out[0], None)# {'base_loss':base_loss, 'decoder_loss':decoder_loss})
+        return (pi_out[0], v_out[0], preds)# {'base_loss':base_loss, 'decoder_loss':decoder_loss})
 
       else:
         pi_out, v_out, self.base_lstm_state_out = sess.run([self.base_pi, self.base_v, self.base_lstm_state],
