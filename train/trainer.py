@@ -424,6 +424,10 @@ class Trainer(object):
   def process(self, sess, global_t, summary_writer, summary_op_dict,
               score_input, eval_input, entropy_input, term_global_t, losses_input):
 
+    #[n.name for n in tf.get_default_graph().as_graph_def().node]
+    print("Graph size is {}".format(
+      len([op for op in tf.get_default_graph().get_operations()]))) #op.name
+
     if self.prev_local_t == 0 and self.segnet_mode >= 2:
       self.prev_local_t = self.local_t
       sess.run(self.local_network.reset_evaluation_vars)
@@ -538,6 +542,9 @@ class Trainer(object):
       if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
         out_list += [self.local_network.evaluation]
 
+    import time
+
+    now = time.time()
     with tf.control_dependencies(grad_check):
       if GPU_LOG:
         return_list = sess.run(out_list,
@@ -545,6 +552,11 @@ class Trainer(object):
       else:
         return_list = sess.run(out_list,
                   feed_dict=feed_dict, options=run_options)
+
+    if time.time() - now > 100.0:
+      print("Too much time on sess.run: check tensorflow", flush=True)
+      sys.exit(0)
+      raise ValueError("More than 100 seconds update!") #
 
     gradients_tuple, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:6]
     grad_norm = gradients_tuple[1]
