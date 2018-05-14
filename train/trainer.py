@@ -23,7 +23,7 @@ GPU_LOG = False # Change main.py
 if GPU_LOG:
   run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True, trace_level=tf.RunOptions.FULL_TRACE)
 else:
-  run_options = tf.RunOptions(report_tensor_allocations_upon_oom=True)
+  run_options = tf.RunOptions()#report_tensor_allocations_upon_oom=True)
 
 class Trainer(object):
   def __init__(self,
@@ -516,8 +516,8 @@ class Trainer(object):
 
 
     grad_check = None
-    if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
-      grad_check = [tf.add_check_numerics_ops()]
+    #if self.local_t - self.prev_local_t_loss >= LOSS_AND_EVAL_LOG_INTERVAL:
+    #  grad_check = [tf.add_check_numerics_ops()]
     #print("Applying gradients in train!", flush=True)
     # Calculate gradients and copy them to global network.
     out_list = [self.apply_gradients]
