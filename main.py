@@ -408,7 +408,7 @@ class Application(object):
     self.terminate_requested = True
 
   def print_flags_info(self):
-    return_string = ""
+    return_string = "\n\n\n"
     return_string += "Envs FILE:{}\n".format(flags.env_name)
     return_string += "Checkpoint dir: {}, Termination time in sec: " \
                      "{}, Max steps to train: {:2.3E}, Parallel threads:{}\n".format(flags.checkpoint_dir,
