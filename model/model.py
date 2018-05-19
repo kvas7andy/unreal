@@ -644,7 +644,7 @@ class UnrealModel(object):
                                                                       self.base_last_action_reward_input: [last_action_reward],
                                                                       self.base_initial_lstm_state0: self.base_lstm_state_out[0],
                                                                       self.base_initial_lstm_state1: self.base_lstm_state_out[1]})
-        return (pi_out[0], v_out[0], preds)# {'base_loss':base_loss, 'decoder_loss':decoder_loss})
+        return (pi_out[0], v_out[0], preds.reshape(self._image_shape))# {'base_loss':base_loss, 'decoder_loss':decoder_loss})
 
       else:
         pi_out, v_out, self.base_lstm_state_out = sess.run([self.base_pi, self.base_v, self.base_lstm_state],

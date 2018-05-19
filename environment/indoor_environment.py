@@ -126,7 +126,7 @@ class IndoorEnvironment(environment.Environment):
       state = self.last_state
 
     pixel_change = None
-    if object_type is not None:
+    if object_type is None:
       pixel_change = self._calc_pixel_change(state['image'], self.last_state['image'])
 
     self.prev_state = self.last_state

@@ -78,24 +78,27 @@ class Application(object):
 
     # set start_time
     trainer.set_start_time(self.start_time)
-    print("Trainer ", parallel_index, " process (re)start!", flush=True)
+    print("Trainer ", parallel_index, " process (re)start!")
 
     prev_print_t = 0
     while True:
       if self.global_t - prev_print_t >= 1000 or not prev_print_t and self.global_t != prev_print_t:
         prev_print_t = self.global_t
         print("Trainer {0}>>> stop_requested: {1}, terminate_requested: {2}, global_t: {3}".format(parallel_index, self.stop_requested,
-                                                self.terminate_requested, self.global_t), flush=True)
+                                                self.terminate_requested, self.global_t))
+        #if parallel_index == 0:
+        #    print("Graph size is {}".format(
+        #        len([n.name for n in self.sess.graph.as_graph_def().node])))
 
       if self.stop_requested:
-        print("Trainer ", parallel_index, ": stop requested!", flush=True)
+        print("Trainer ", parallel_index, ": stop requested!")
         break
       if self.terminate_requested:
-        print("Trainer ", parallel_index, ": terminate_requested => process stop!", flush=True)
+        print("Trainer ", parallel_index, ": terminate_requested => process stop!")
         trainer.stop()
         break
       if self.global_t > flags.max_time_step:
-        print("Trainer ", parallel_index, ": end of training!", flush=True)
+        print("Trainer ", parallel_index, ": end of training!")
         trainer.stop()
         break
       if parallel_index == 0 and self.global_t > self.next_save_steps:
@@ -104,17 +107,32 @@ class Application(object):
 
 
       try:
-        diff_global_t = trainer.process(self.sess,
-                                        self.global_t,
-                                        self.summary_writer[parallel_index],
-                                        self.summary_op_dict,
-                                        self.score_input,
-                                        self.mIoU_input,
-                                        self.entropy_input,
-                                        self.term_global_t,
-                                        self.losses_input)
+        diff_global_t, score = trainer.process(self.sess,
+                                            self.global_t,
+                                            self.summary_writer[parallel_index],
+                                            self.summary_op_dict,
+                                            self.score_input,
+                                            self.mIoU_input,
+                                            self.entropy_input,
+                                            self.term_global_t,
+                                            self.losses_input)
 
         self.global_t += diff_global_t
+        if parallel_index == 0 and score is not None:
+            #print("Got score", flush=True)
+            self.last_scores += [score]
+            if len(self.last_scores) >= 50:
+                print("Last scores len >= 50")
+                cur_score = np.mean(self.last_scores)
+                print("Best score: {}, Cur score: {}".format(self.best_score, cur_score))
+                self.last_scores = self.last_scores[-10:]
+                if cur_score > self.best_score:
+                    self.best_score = cur_score
+                    self.save(name="best-checkpoint")
+
+        # [n.name for n in tf.get_default_graph().as_graph_def().node]
+        # [op for op in tf.get_default_graph().get_operations()] #op.name
+
 
         # GPU logging memory
         # prev_runs_t = 0
@@ -136,7 +154,7 @@ class Application(object):
         print("Trainer ", parallel_index, " process Error!", flush=True)
         break
 
-    print("Trainer ", parallel_index, " after a while return!", flush=True)
+    print("Trainer ", parallel_index, " after a while return!")
 
   def run(self):
     device = "/cpu:0"
@@ -168,6 +186,7 @@ class Application(object):
 
     env_config = sim_config.get(flags.env_name)
     self.image_shape = [env_config.get('height', 84), env_config.get('width', 84)]
+    self.map_file = env_config.get('objecttypes_file', '../../objectTypes_1x.csv')
     
     initial_learning_rate = log_uniform(flags.initial_alpha_low,
                                         flags.initial_alpha_high,
@@ -245,6 +264,10 @@ class Application(object):
                         segnet_lambda=flags.segnet_lambda,
                         dropout=flags.dropout)
       self.trainers.append(trainer)
+
+
+    self.last_scores = []
+    self.best_score = -1.0
     
     # prepare session
     config = tf.ConfigProto(allow_soft_placement = True, log_device_placement = False)
@@ -315,14 +338,60 @@ class Application(object):
     
     # init or load checkpoint with saver
     self.saver = tf.train.Saver(self.global_network.get_global_vars(), max_to_keep=20)
+
+
     
-    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir, latest_filename ="best-checkpoint")
+    if checkpoint is None or checkpoint.model_checkpoint_path is None:
+      checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+
     if checkpoint and checkpoint.model_checkpoint_path:
-      self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
+      if flags.segnet == -1:
+          from tensorflow.python import pywrap_tensorflow
+          reader = pywrap_tensorflow.NewCheckpointReader(checkpoint.model_checkpoint_path)
+          big_var_to_shape_map = reader.get_variable_to_shape_map()
+          s = []
+          for key in big_var_to_shape_map:
+              s += [key]
+              # print("tensor_name: ", key)
+          glob_var_names = [v.name for v in tf.global_variables()]
+          endings = [r.split('/')[-1][:-2] for r in glob_var_names]
+          old_ckpt_to_new_ckpt = {[k for k in s if endings[i] in k][0]: v for i, v in enumerate(tf.global_variables())}
+          saver1 = tf.train.Saver(var_list=old_ckpt_to_new_ckpt)
+          saver1.restore(self.sess, checkpoint.model_checkpoint_path)
+      else:
+          self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
       print("checkpoint loaded:", checkpoint.model_checkpoint_path)
       tokens = checkpoint.model_checkpoint_path.split("-")
       # set global step
-      self.global_t = int(tokens[1])
+      if 'best' in checkpoint.model_checkpoint_path:
+          files = os.listdir(flags.checkpoint_dir)
+          max_g_step = 0
+          max_best_score = -10
+          for file in files:
+            if '.meta' not in file or 'checkpoint' not in file:
+              continue
+            if len(tokens) == 2:
+              continue
+            if len(tokens) > 3:
+              best_score = float('-0.'+file.split('-')[2]) if 'best' in file else float('-0.'+file.split('-')[1])
+              if best_score > max_best_score:
+                g_step = int(file.split('-')[3]) if 'best' in file else int(file.split('-')[2])
+                if max_g_step < g_step:
+                  max_g_step = g_step
+            else:
+              self.best_score = -1.0
+              g_step = int(file.split('-')[2]) if 'best' in file else int(file.split('-')[1])
+              if max_g_step < g_step:
+                max_g_step = g_step
+          self.best_score = max_best_score
+          self.global_t = max_g_step
+          print("Chosen g_step >>", g_step)
+      else:
+        if len(tokens) == 3:
+          self.global_t = int(tokens[2])
+        else:
+          self.global_t = int(tokens[1])
       #for i in range(flags.parallel_size):
       #  self.trainers[i].local_t = self.global_t
       print(">>> global step set: ", self.global_t)
@@ -331,12 +400,36 @@ class Application(object):
       with open(wall_t_fname, 'r') as f:
         self.wall_t = float(f.read())
         self.next_save_steps = (self.global_t + flags.save_interval_step) // flags.save_interval_step * flags.save_interval_step
-        
+
     else:
       print("Could not find old checkpoint")
       # set wall time
       self.wall_t = 0.0
       self.next_save_steps = flags.save_interval_step
+    print("Global step {}, max best score {}".format(self.global_t, self.best_score))
+
+    if flags.segnet_pretrain:
+        checkpoint_dir = "../erfnet_segmentation/models"
+        checkpoint_dir = os.path.join(checkpoint_dir, "aug_erfnetC_0_{}x{}_{}x/snapshots_best".format(
+            self.image_shape[1],
+            self.image_shape[0],
+            self.map_file.split('_')[1].split('x')[0]))
+        checkpoint = tf.train.get_checkpoint_state(checkpoint_dir)
+
+        big_weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_encoder')
+        big_weights += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_decoder')
+
+        erfnet_weights = [l.name.split(':')[0].rsplit('net_-1/base_encoder/')[-1] for l in big_weights
+               if len(l.name.split(':')[0].rsplit('net_-1/base_encoder/')) == 2]
+        erfnet_weights += [l.name.split(':')[0].rsplit('net_-1/base_decoder/')[-1] for l in big_weights
+                if len(l.name.split(':')[0].rsplit('net_-1/base_decoder/')) == 2]
+
+        if checkpoint and checkpoint.model_checkpoint_path:
+            saver2 = tf.train.Saver(var_list=dict(zip(erfnet_weights, big_weights)))
+            saver2.restore(self.sess, checkpoint.model_checkpoint_path)
+            print("ErfNet pretrained weights restored from file ", checkpoint_dir)
+        else:
+            print("Can't load pretrained weights for ErfNet from file ", checkpoint_dir)
 
     # run training threads
     self.train_threads = []
@@ -355,7 +448,7 @@ class Application(object):
     print('Press Ctrl+C to stop', flush=True)
     signal.pause()
 
-  def save(self):
+  def save(self, name=""):
     """ Save checkpoint. 
     Called from thread-0.
     """
@@ -381,9 +474,13 @@ class Application(object):
         with open(wall_t_fname, 'w') as f:
           f.write(str(wall_t))
 
+        ckpt_name = 'checkpoint'
+        if name != "":
+            ckpt_name = name
+        ckpt_name += '-' + str(abs(self.best_score))[2:8] # Here may be bug
         print('Start saving.')
         self.saver.save(self.sess,
-                        flags.checkpoint_dir + '/' + 'checkpoint',
+                        flags.checkpoint_dir + '/' + ckpt_name,
                         global_step = self.global_t)
         print('End saving.')
 
@@ -421,7 +518,7 @@ class Application(object):
     return_string += "Use PC:{}, Use VR:{}, use RP:{}\n".format(flags.use_pixel_change,
                                                               flags.use_value_replay,
                                                               flags.use_reward_prediction)
-    return_string += "Experience hist size: {}, Local_t: {}, n-step-TD: {}\n".format(flags.experience_history_size,
+    return_string += "Experience hist size: {}, Local_t max: {}, n-step-TD: {}\n".format(flags.experience_history_size,
                                                                                    flags.local_t_max,
                                                                                    flags.n_step_TD)
     return_string += "Entropy beta: {}, Gradient norm clipping: {}, Rmsprop alpha: {}, Saving step: {}\n".format(

@@ -3,6 +3,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import tensorflow as tf
 import numpy as np
 import cv2
@@ -39,7 +41,7 @@ class MovieWriter(object):
     frame_size is (w, h)
     """
     self._frame_size = frame_size
-    fourcc = cv2.cv.CV_FOURCC('m', 'p', '4', 'v')
+    fourcc = cv2.VideoWriter_fourcc('m','p', '4', 'v')
     self.vout = cv2.VideoWriter()
     success = self.vout.open(file_name, fourcc, fps, frame_size, True)
     if not success:
@@ -167,11 +169,14 @@ class Display(object):
       data = pixel_change_.astype(np.uint8)
       data = np.stack([data for _ in range(3)], axis=2)
       data = self.scale_image(data, 4)
-      image = pygame.image.frombuffer(data, (80, 80), 'RGB')
+      #print("PC shape", data.shape)
+      image = pygame.image.frombuffer(data, (20*4, 20*4), 'RGB')
     else:
-      image = pygame.image.frombuffer(pixel_change, self.image_shape[:2], 'RGB')
-    self.surface.blit(image, (left+8+4, top+8+4))
-    self.draw_center_text(label, left + 100/2, top + 100)
+      pixel_change = self.scale_image(pixel_change, 2)
+      #print("Preds shape", pixel_change.shape)
+      image = pygame.image.frombuffer(pixel_change.astype(np.uint8), (self.image_shape[0]*2, self.image_shape[1]*2), 'RGB')
+    self.surface.blit(image, (2*left+16+8, 2*top+16+8))
+    self.draw_center_text(label, 2*left + 200/2, 2*top + 200)
     
 
   def show_policy(self, pi):
@@ -184,9 +189,9 @@ class Display(object):
   
     for i in range(len(pi)):
       width = pi[i] * 100
-      pygame.draw.rect(self.surface, WHITE, (start_x, y, width, 10))
+      pygame.draw.rect(self.surface, WHITE, (2*start_x, 2*y, 2*width, 2*10))
       y += 20
-    self.draw_center_text("PI", 50, y)
+    self.draw_center_text("PI", 2*50, 2*y)
   
   def show_image(self, state):
     """
@@ -194,9 +199,10 @@ class Display(object):
     """
     state_ = state * 255.0
     data = state_.astype(np.uint8)
-    image = pygame.image.frombuffer(data, self.image_shape[:2], 'RGB')
-    self.surface.blit(image, (8, 8))
-    self.draw_center_text("input", 50, 100)
+    data = self.scale_image(data, 2)
+    image = pygame.image.frombuffer(data, (self.image_shape[0]*2, self.image_shape[1]*2), 'RGB')
+    self.surface.blit(image, (8*2, 8*2))
+    self.draw_center_text("input", 2*50, 2*100)
 
   def show_value(self):
     if self.value_history.is_empty:
@@ -211,10 +217,10 @@ class Display(object):
       min_v = min(min_v, v)
       max_v = max(max_v, v)
 
-    top = 150
-    left = 150
-    width = 100
-    height = 100
+    top = 150*2
+    left = 150*2
+    width = 100*2
+    height = 100*2
     bottom = top + width
     right = left + height
 
@@ -258,14 +264,14 @@ class Display(object):
         color = RED
       else:
         color = WHITE
-      pygame.draw.rect(self.surface, color, (start_x+15, y, width, 10))
-      self.draw_text(labels[i], start_x, y-1, color)
+      pygame.draw.rect(self.surface, color, (2*start_x+2*15, 2*y, 2*width, 2*10))
+      self.draw_text(labels[i], 2*start_x, 2*y-2*1, color)
       y += 20
     
-    self.draw_center_text("RP", start_x + 100/2, y)
+    self.draw_center_text("RP", 2*start_x + 2*100/2, y)
 
   def show_reward(self):
-    self.draw_text("REWARD: {}".format(int(self.episode_reward)), 310, 10)
+    self.draw_text("REWARD: {:.4}".format(float(self.episode_reward)), 300, 2*10)
 
   def process(self, sess):
     sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
@@ -276,15 +282,21 @@ class Display(object):
     last_action_reward = ExperienceFrame.concat_action_and_reward(last_action, self.action_size,
                                                                   last_reward, self.environment.last_state)
     preds=None
+    mode = "segnet" if flags.segnet >= 2 else ""
+    mode="" #don't want preds
     if not flags.use_pixel_change:
       pi_values, v_value, preds = self.global_network.run_base_policy_and_value(sess,
                                                                          self.environment.last_state,
-                                                                         last_action_reward)
+                                                                         last_action_reward, mode=mode)
     else:
       pi_values, v_value, pc_q = self.global_network.run_base_policy_value_pc_q(sess,
                                                                                 self.environment.last_state,
                                                                                 last_action_reward)
+
+    #print(preds)
     self.value_history.add_value(v_value)
+
+    prev_state = self.environment.last_state
     
     action = self.choose_action(pi_values)
     state, reward, terminal, pixel_change = self.environment.process(action)
@@ -301,7 +313,8 @@ class Display(object):
     
     if not flags.use_pixel_change:
       if preds is not None:
-        self.show_pixel_change(self.label_to_rgb(preds), 100, 0, 3.0, "Segm Mask")
+        self.show_pixel_change(self.label_to_rgb(preds), 100, 0, 3.0, "Preds")
+        self.show_pixel_change(self.label_to_rgb(state['objectType']), 200, 0, 0.4, "Segm Mask")
     else:
       self.show_pixel_change(pixel_change, 100, 0, 3.0, "PC")
       self.show_pixel_change(pc_q[:,:,action], 200, 0, 0.4, "PC Q")
@@ -321,10 +334,11 @@ class Display(object):
     ind_col = self.label_mapping[["index", "color"]].values
     index = ind_col[:, 0].astype(np.int)
     self.index, ind = np.unique(index, return_index=True)
-    self.col = np.array([map(lambda x: int(x), col.split('_')) for col in ind_col[ind, 1]])
+    self.col = np.array([[int(x) for x in col.split('_')] for col in ind_col[ind, 1]])
 
   def label_to_rgb(self, labels):
-    rgb_img = self.col[np.where(self.index[np.newaxis, :] == labels.ravel()[:, np.newaxis])[1]]
+    #print(self.col)
+    rgb_img = self.col[np.where(self.index[np.newaxis, :] == labels.ravel()[:, np.newaxis])[1]].reshape(labels.shape + (3,))
     return rgb_img
 
 
@@ -336,15 +350,36 @@ def main(args):
 
   sess = tf.Session(config=config)
   try:
-    display_size = (440, 400)
+    display_size = (440, 300)
+    if flags.segnet >= 2:
+      display_size = (660, 600)
     display = Display(display_size)
     saver = tf.train.Saver()
-    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
-    if checkpoint and checkpoint.model_checkpoint_path:
-     saver.restore(sess, checkpoint.model_checkpoint_path)
-     print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+
+    if flags.checkpoint:
+      saver.restore(sess, os.path.join(flags.checkpoint_dir, flags.checkpoint))
+      print("Restored from checkpoint!")
     else:
-     print("Could not find old checkpoint")
+      checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+      if checkpoint and checkpoint.model_checkpoint_path:
+        if flags.segnet == 0:
+          from tensorflow.python import pywrap_tensorflow
+          reader = pywrap_tensorflow.NewCheckpointReader(checkpoint.model_checkpoint_path)
+          big_var_to_shape_map = reader.get_variable_to_shape_map()
+          s = []
+          for key in big_var_to_shape_map:
+            s += [key]
+            # print("tensor_name: ", key)
+          glob_var_names = [v.name for v in tf.global_variables()]
+          endings = [r.split('/')[-1][:-2] for r in glob_var_names]
+          old_ckpt_to_new_ckpt = {[k for k in s if endings[i] in k][0]: v for i, v in enumerate(tf.global_variables())}
+          saver1 = tf.train.Saver(var_list=old_ckpt_to_new_ckpt)
+          saver1.restore(sess, checkpoint.model_checkpoint_path)
+        else:
+          saver.restore(sess, checkpoint.model_checkpoint_path)
+        print("checkpoint loaded:", checkpoint.model_checkpoint_path)
+      else:
+        print("Could not find old checkpoint")
     # checkpoint_file = tf.train.latest_checkpoint(flags.checkpoint_dir)
     # print(checkpoint_file)
     # if checkpoint_file is None:
@@ -358,7 +393,11 @@ def main(args):
     FPS = 15
 
     if flags.recording:
-      writer = MovieWriter("out.mov", display_size, FPS)
+      name = "out_{}.mov".format(flags.checkpoint_dir)
+      i = 0
+      while os.path.exists(name):
+        name = "{}_{}".format(name, i)
+      writer = MovieWriter(name, display_size, FPS)
 
     if flags.frame_saving:
       frame_count = 0

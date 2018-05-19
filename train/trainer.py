@@ -14,9 +14,9 @@ from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
-LOG_INTERVAL = 200
-PERFORMANCE_LOG_INTERVAL = 1000
-LOSS_AND_EVAL_LOG_INTERVAL = 1000
+LOG_INTERVAL = 300
+PERFORMANCE_LOG_INTERVAL = 5000
+LOSS_AND_EVAL_LOG_INTERVAL = 5000
 
 GPU_LOG = False # Change main.py
 
@@ -117,7 +117,7 @@ class Trainer(object):
       self.initial_learning_rate = initial_learning_rate
       self.episode_reward = 0
       # For log output
-      self.prev_local_t = 0
+      self.prev_local_t = -1
       self.prev_local_t_loss = 0
     except Exception as e:
       print(str(e), flush=True)
@@ -250,7 +250,7 @@ class Trainer(object):
       if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
         print("Trainer {}>>> Local step {}:".format(self.thread_index, self.local_t))
         print("Trainer {}>>> pi={}".format(self.thread_index, pi_))
-        print("Trainer {}>>> V={}".format(self.thread_index, value_), flush=True)
+        print("Trainer {}>>> V={}".format(self.thread_index, value_))
 
       prev_state = self.environment.last_state
 
@@ -424,20 +424,17 @@ class Trainer(object):
   def process(self, sess, global_t, summary_writer, summary_op_dict,
               score_input, eval_input, entropy_input, term_global_t, losses_input):
 
-    #[n.name for n in tf.get_default_graph().as_graph_def().node]
-    print("Graph size is {}".format(
-      len([op for op in tf.get_default_graph().get_operations()]))) #op.name
-
-    if self.prev_local_t == 0 and self.segnet_mode >= 2:
-      self.prev_local_t = self.local_t
+    if self.prev_local_t == -1 and self.segnet_mode >= 2:
+      self.prev_local_t = 0
       sess.run(self.local_network.reset_evaluation_vars)
     # Fill experience replay buffer
     #print("Inside train process of thread!", flush=True)
     if not self.experience.is_full():
       self._fill_experience(sess)
-      return 0
+      return 0, None
 
     start_local_t = self.local_t
+    episode_score = None
 
     cur_learning_rate = self._anneal_learning_rate(global_t)
 
@@ -463,6 +460,8 @@ class Trainer(object):
       self._record_one(sess, summary_writer, summary_op_dict['term_global_t'], term_global_t,
                        global_t, global_t)
       summary_writer.flush()
+      # Return advanced local step size
+      episode_score =summary_dict['values'].get('score_input', None)
       summary_dict['values'] = {}
 
     feed_dict = {
@@ -553,10 +552,10 @@ class Trainer(object):
         return_list = sess.run(out_list,
                   feed_dict=feed_dict, options=run_options)
 
-    if time.time() - now > 100.0:
+    if time.time() - now > 30.0:
       print("Too much time on sess.run: check tensorflow", flush=True)
       sys.exit(0)
-      raise ValueError("More than 100 seconds update!") #
+      raise ValueError("More than 100 seconds update in tensorflow!") #
 
     gradients_tuple, total_loss, base_loss, policy_loss, value_loss, entropy = return_list[:6]
     grad_norm = gradients_tuple[1]
@@ -616,7 +615,7 @@ class Trainer(object):
     
     # Return advanced local step size
     diff_local_t = self.local_t - start_local_t
-    return diff_local_t
+    return diff_local_t, episode_score
 
 
   ### TimeLiner class

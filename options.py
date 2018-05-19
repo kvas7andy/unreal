@@ -20,8 +20,10 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_pixel_change", True, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
+  tf.app.flags.DEFINE_boolean("segnet_pretrain", False, "whether to use pretrained ErfNet weights")
 
-  tf.app.flags.DEFINE_string("checkpoint_dir", "./checkpoints", "checkpoint directory")
+  tf.app.flags.DEFINE_string("checkpoint_dir", "", "checkpoint directory")
+  tf.app.flags.DEFINE_string("checkpoint", "", "checkpoint directory")
 
   # Segmentation options
   tf.app.flags.DEFINE_integer("segnet", 0, "use segmentation mode: 0 - no, "
@@ -36,7 +38,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
   tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
   tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
-  tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regularization constant")
+  tf.app.flags.DEFINE_float("entropy_beta", 0.0005, "entropy regularization constant")
 
   # For training
   if option_type == 'training':
@@ -61,13 +63,13 @@ def get_options(option_type):
   # For display
   if option_type == 'display':
     tf.app.flags.DEFINE_string("frame_save_dir", "/tmp/unreal_frames", "frame save directory")
-    tf.app.flags.DEFINE_boolean("recording", False, "whether to record movie")
+    tf.app.flags.DEFINE_boolean("recording", False, "name of file to record movie")
     tf.app.flags.DEFINE_boolean("frame_saving", False, "whether to save frames")
 
   # For evaluation or display
   if option_type in ('evaluate', 'display'):
-    tf.app.flags.DEFINE_string("split", "val", "What data split to use")
+    tf.app.flags.DEFINE_string("split", "test", "What data split to use")
     tf.app.flags.DEFINE_integer("episodes_per_scene", 10, "How many episodes to test per scene")
-    tf.app.flags.DEFINE_boolean("log_action_trace", True, "Whether to log action trace")
+    tf.app.flags.DEFINE_boolean("log_action_trace", False, "Whether to log action trace")
 
   return tf.app.flags.FLAGS
