@@ -98,5 +98,5 @@ class Environment(object):
       c = self._subsample(m, 4)
       return c
     except Exception as e:
-      print(str(e), flush=True)
+      print(str(e))#, flush=True)
       raise Exception("Exception inside calc_pixel_change")

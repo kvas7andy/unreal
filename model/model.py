@@ -99,7 +99,7 @@ class UnrealModel(object):
     self.class_names =  np.array(['void', 'wall_ceiling_floor_window', 'otherprop', 'arch_door', 'chair', 'sofa',
                                   'bed', 'bathtub', 'toilet'])
 
-    print("Network start creation in thread {}!".format(self._thread_index), flush=True)
+    print("Network start creation in thread {}!".format(self._thread_index))#, flush=True)
 
     self._create_network(for_display)
 

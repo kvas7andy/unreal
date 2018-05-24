@@ -73,7 +73,7 @@ class Application(object):
       if preparing:
         trainer.prepare()
     except Exception as e:
-      print(str(e), flush=True)
+      print(str(e))#, flush=True)
       raise Exception("Problem with trainer environment creation")
 
     # set start_time
@@ -148,10 +148,10 @@ class Application(object):
         #
 
       except Exception as e:
-        print(traceback.format_exc(), flush=True)
+        print(traceback.format_exc())#, flush=True)
         trainer.stop()
         ## Let it be here!!!
-        print("Trainer ", parallel_index, " process Error!", flush=True)
+        print("Trainer ", parallel_index, " process Error!")#, flush=True)
         break
 
     print("Trainer ", parallel_index, " after a while return!")
@@ -184,7 +184,10 @@ class Application(object):
     else: # 0, 1, 2, 3
       segnet_param_dict = {'segnet_mode': flags.segnet}
 
-    env_config = sim_config.get(flags.env_name)
+    if flags.env_type != 'indoor':
+        env_config = {}
+    else:
+        env_config = sim_config.get(flags.env_name)
     self.image_shape = [env_config.get('height', 84), env_config.get('width', 84)]
     self.map_file = env_config.get('objecttypes_file', '../../objectTypes_1x.csv')
     
@@ -204,7 +207,7 @@ class Application(object):
 
     self.random_state = np.random.RandomState(seed=env_config.get("seed", 0xA3C))
 
-    print("Global network initializing!", flush=True)
+    print("Global network initializing!")#, flush=True)
 
     self.global_network = UnrealModel(action_size,
                                       objective_size,
@@ -276,7 +279,7 @@ class Application(object):
 
     # Wrap sess.run for debugging messages!
     def run_(*args, **kwargs):
-      #print(">>> RUN!", args[0] if args else None, flush=True)
+      #print(">>> RUN!", args[0] if args else None)#, flush=True)
       return self.sess.__run(*args, **kwargs)  # getattr(self, "__run")(self, *args, **kwargs)
     self.sess.__run, self.sess.run = self.sess.run, run_
 
@@ -445,7 +448,7 @@ class Application(object):
     for t in self.train_threads:
       t.start()
   
-    print('Press Ctrl+C to stop', flush=True)
+    print('Press Ctrl+C to stop')#, flush=True)
     signal.pause()
 
   def save(self, name=""):
@@ -455,7 +458,7 @@ class Application(object):
     self.stop_requested = True
   
     # Wait for all other threads to stop
-    print("Waiting for childs!", flush=True)
+    print("Waiting for childs!")#, flush=True)
     for (i, t) in enumerate(self.train_threads):
       if i != 0:
         t.join()
@@ -489,7 +492,7 @@ class Application(object):
     except Exception as e:
         self.terminate_requested = True
         ## Let it be here for debug save() function!!!
-        print(traceback.format_exc(), flush=True)
+        print(traceback.format_exc())#, flush=True)
         raise Exception("Error in 'save' occured!")
     finally:
         # Restart other threads
@@ -501,7 +504,7 @@ class Application(object):
             thread.start()
     
   def signal_handler(self, signal, frame):
-    print('You pressed Ctrl+C!', flush=True)
+    print('You pressed Ctrl+C!')#, flush=True)
     self.terminate_requested = True
 
   def print_flags_info(self):

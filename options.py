@@ -22,7 +22,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("segnet_pretrain", False, "whether to use pretrained ErfNet weights")
 
-  tf.app.flags.DEFINE_string("checkpoint_dir", "", "checkpoint directory")
+  tf.app.flags.DEFINE_string("checkpoint_dir", "lab_ckpt", "checkpoint directory")
   tf.app.flags.DEFINE_string("checkpoint", "", "checkpoint directory")
 
   # Segmentation options
@@ -35,10 +35,10 @@ def get_options(option_type):
 
   tf.app.flags.DEFINE_float("segnet_lambda", 1.0, "weighting of segmentation network loss")
   tf.app.flags.DEFINE_float("dropout", 0.3, "dropout for encoder")
-  tf.app.flags.DEFINE_integer("parallel_size", 4, "parallel thread size")
+  tf.app.flags.DEFINE_integer("parallel_size", 8, "parallel thread size")
   tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
   tf.app.flags.DEFINE_integer("n_step_TD", 20, "size n for n-step TD")
-  tf.app.flags.DEFINE_float("entropy_beta", 0.0005, "entropy regularization constant")
+  tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regularization constant")
 
   # For training
   if option_type == 'training':

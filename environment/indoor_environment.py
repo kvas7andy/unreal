@@ -56,7 +56,7 @@ class IndoorEnvironment(environment.Environment):
       self._sim_obs_space = self._sim.get_observation_space(simargs['outputs'])
       self.reset()
     except Exception as e:
-      print("Error in indoor_env init():", str(e), flush=True)
+      print("Error in indoor_env init():", str(e))#, flush=True)
       raise Exception
 
 

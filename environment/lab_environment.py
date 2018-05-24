@@ -17,7 +17,7 @@ def worker(conn, env_name):
   level = env_name
   env = deepmind_lab.Lab(
     level,
-    ['RGB_INTERLACED'],
+    ['RGB_INTERLEAVED'],
     config={
       'fps': str(60),
       'width': str(84),
@@ -30,13 +30,13 @@ def worker(conn, env_name):
 
     if command == COMMAND_RESET:
       env.reset()
-      obs = env.observations()['RGB_INTERLACED']
+      obs = env.observations()['RGB_INTERLEAVED']
       conn.send(obs)
     elif command == COMMAND_ACTION:
       reward = env.step(arg, num_steps=4)
       terminal = not env.is_running()
       if not terminal:
-        obs = env.observations()['RGB_INTERLACED']
+        obs = env.observations()['RGB_INTERLEAVED']
       else:
         obs = 0
       conn.send([obs, reward, terminal])

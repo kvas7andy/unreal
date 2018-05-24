@@ -112,10 +112,10 @@ class RMSPropApplier(object):
     print("Trainer {}>> update_ops: {}".format(thread_index, len(update_ops)))
 
     try:
-      print("Slots: rmsprop create", flush=True)
+      print("Slots: rmsprop create")#, flush=True)
       with tf.control_dependencies(None):
         self._create_slots(global_var_list)
-      print("Slots: rmsprop created", flush=True)
+      print("Slots: rmsprop created")#, flush=True)
 
       # global gradient norm clipping
       local_grad_list, global_grad_norm =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
@@ -128,5 +128,5 @@ class RMSPropApplier(object):
               update_ops.append(self._apply_dense(grad, var))
           return tf.group(*update_ops, name=name), global_grad_norm
     except Exception as e:
-      print("Erro: ", str(e), flush=True)
+      print("Error: ", str(e))#, flush=True)
       raise Exception

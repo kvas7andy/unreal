@@ -120,7 +120,7 @@ class Trainer(object):
       self.prev_local_t = -1
       self.prev_local_t_loss = 0
     except Exception as e:
-      print(str(e), flush=True)
+      print(str(e))#, flush=True)
       raise Exception("Problem in Trainer {} initialization".format(thread_index))
 
 
@@ -553,7 +553,7 @@ class Trainer(object):
                   feed_dict=feed_dict, options=run_options)
 
     if time.time() - now > 30.0:
-      print("Too much time on sess.run: check tensorflow", flush=True)
+      print("Too much time on sess.run: check tensorflow")#, flush=True)
       sys.exit(0)
       raise ValueError("More than 100 seconds update in tensorflow!") #
 
