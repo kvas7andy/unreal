@@ -25,7 +25,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_string("checkpoint", "", "checkpoint directory")
 
   # Segmentation options
-  tf.app.flags.DEFINE_integer("segnet", 1, "use segmentation mode: 0 - no, "
+  tf.app.flags.DEFINE_integer("segnet", 2, "use segmentation mode: 0 - no, "
                                            "1 - encoder only, 2 - decoder on encoder, "
                                            "3 - decoder on lstm output")
   tf.app.flags.DEFINE_string("segnet_config", "config.json", "segnet config file")

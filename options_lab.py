@@ -16,7 +16,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_string("env_type", "lab", "environment type (lab or gym or maze or indoor)")
   tf.app.flags.DEFINE_string("env_name", "nav_maze_static_01",  "environment name")
   tf.app.flags.DEFINE_boolean("use_lstm", True, "whether to use lstm")
-  tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
+  tf.app.flags.DEFINE_boolean("use_pixel_change", True, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("segnet_pretrain", False, "whether to use pretrained ErfNet weights")
@@ -25,11 +25,11 @@ def get_options(option_type):
   tf.app.flags.DEFINE_string("checkpoint", "", "checkpoint directory")
 
   # Segmentation options
-  tf.app.flags.DEFINE_integer("segnet", 1, "use segmentation mode: 0 - no, "
+  tf.app.flags.DEFINE_integer("segnet", 0, "use segmentation mode: 0 - no, "
                                            "1 - encoder only, 2 - decoder on encoder, "
                                            "3 - decoder on lstm output")
   tf.app.flags.DEFINE_string("segnet_config", "config.json", "segnet config file")
-  tf.app.flags.DEFINE_integer("n_classes", 19, "segmentation classes")
+  tf.app.flags.DEFINE_integer("n_classes", 9, "segmentation classes")
   tf.app.flags.DEFINE_float("termination_time_sec", 50.0, "seconds until termination (steps/10)")
 
   tf.app.flags.DEFINE_float("segnet_lambda", 1.0, "weighting of segmentation network loss")

@@ -27,8 +27,11 @@ import minos.config.sim_config as sim_config
 
 USE_GPU = True # To use GPU, set True
 
+base_dir = "/root/hdd/repos/minos_unreal"
+
 # get command line args
 flags = get_options("training")
+flags.checkpoint_dir = os.path.join(base_dir, flags.checkpoint_dir)
 flags.log_dir = os.path.join(flags.checkpoint_dir, flags.log_dir)
 
 if flags.segnet >= 1:
