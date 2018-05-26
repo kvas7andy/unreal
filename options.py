@@ -4,9 +4,8 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import os
 import time
-
+import os
 
 def get_options(option_type):
   """
@@ -47,8 +46,9 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
     file = os.path.join("./logs", time.strftime("%Y_%m_%d_%H_%M_%S"))
     tf.app.flags.DEFINE_string("log_dir",
-                              file,
+                              file, #"./logs"
                               "log file directory")
+    # tf.app.flags.DEFINE_string("log_file", "/tmp/unreal_log/unreal_log", "log file directory")
     tf.app.flags.DEFINE_float("initial_alpha_low", 1e-4, "log_uniform low limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_high", 5e-3, "log_uniform high limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")
@@ -63,13 +63,13 @@ def get_options(option_type):
   # For display
   if option_type == 'display':
     tf.app.flags.DEFINE_string("frame_save_dir", "/tmp/unreal_frames", "frame save directory")
-    tf.app.flags.DEFINE_boolean("recording", False, "name of file to record movie")
+    tf.app.flags.DEFINE_boolean("recording", False, "whether to record movie")
     tf.app.flags.DEFINE_boolean("frame_saving", False, "whether to save frames")
 
   # For evaluation or display
   if option_type in ('evaluate', 'display'):
-    tf.app.flags.DEFINE_string("split", "test", "What data split to use")
-    tf.app.flags.DEFINE_integer("episodes_per_scene", 10, "How many episodes to test per scene")
-    tf.app.flags.DEFINE_boolean("log_action_trace", False, "Whether to log action trace")
+    tf.app.flags.DEFINE_string("split", "val", "What data split to use")
+    tf.app.flags.DEFINE_integer("episodes_per_scene", 1, "How many episodes to test per scene")
+    tf.app.flags.DEFINE_boolean("log_action_trace", True, "Whether to log action trace")
 
   return tf.app.flags.FLAGS

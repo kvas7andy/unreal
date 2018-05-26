@@ -7,6 +7,8 @@ import numpy as np
 import time
 import json
 
+import sys
+
 import tensorflow as tf
 from tensorflow.python.client import timeline
 
@@ -14,8 +16,8 @@ from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
-LOG_INTERVAL = 300
-PERFORMANCE_LOG_INTERVAL = 5000
+LOG_INTERVAL = 100
+PERFORMANCE_LOG_INTERVAL = 1000
 LOSS_AND_EVAL_LOG_INTERVAL = 5000
 
 GPU_LOG = False # Change main.py
@@ -160,7 +162,6 @@ class Trainer(object):
       for key in dict_input.keys():
         feed_dict.update({dict_input[key]: dict_eval[key]})
       summary_str = sess.run(summary_op, feed_dict=feed_dict)
-
       summary_writer.add_summary(summary_str, global_t)
 
     

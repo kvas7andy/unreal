@@ -11,11 +11,11 @@ class ExperienceFrame(object):
   def __init__(self, state, reward, action, terminal, pixel_change, last_action, last_reward):
     self.state = state
     self.action = action # (Taken action with the 'state')
-    self.reward = reward # Reward with the 'state'. (Clipped)
+    self.reward = np.clip(reward, -1, 1) # Reward with the 'state'. (Clipped)
     self.terminal = terminal # (Whether terminated when 'state' was inputted)
     self.pixel_change = pixel_change
     self.last_action = last_action # (After this last action was taken, agent move to the 'state')
-    self.last_reward = last_reward # (After this last reward was received, agent move to the 'state') (Clipped)
+    self.last_reward = np.clip(last_reward, -1, 1) # (After this last reward was received, agent move to the 'state') (Clipped)
 
   def get_last_action_reward(self, action_size):
     """
@@ -50,15 +50,14 @@ class Experience(object):
     self._history_size = history_size
     self._frames = deque(maxlen=history_size)
     # frame indices for zero rewards
-    self._pos_reward_indices = deque()
+    self._zero_reward_indices = deque()
     # frame indices for non zero rewards
-    self._neg_reward_indices = deque()
+    self._non_zero_reward_indices = deque()
     self._top_frame_index = 0
-    self.random_state = random_state
 
   def get_debug_string(self):
     return "{} frames, {} zero rewards, {} non zero rewards".format(
-      len(self._frames), len(self._pos_reward_indices), len(self._neg_reward_indices))
+      len(self._frames), len(self._zero_reward_indices), len(self._non_zero_reward_indices))
 
   def add_frame(self, frame):
     if frame.terminal and len(self._frames) > 0 and self._frames[-1].terminal:
@@ -74,23 +73,23 @@ class Experience(object):
 
     # append index
     if frame_index >= 3:
-      if frame.reward > 0:
-        self._pos_reward_indices.append(frame_index)
+      if frame.reward == 0:
+        self._zero_reward_indices.append(frame_index)
       else:
-        self._neg_reward_indices.append(frame_index)
+        self._non_zero_reward_indices.append(frame_index)
     
     if was_full:
       self._top_frame_index += 1
 
       cut_frame_index = self._top_frame_index + 3
       # Cut frame if its index is lower than cut_frame_index.
-      if len(self._pos_reward_indices) > 0 and \
-         self._pos_reward_indices[0] < cut_frame_index:
-        self._pos_reward_indices.popleft()
+      if len(self._zero_reward_indices) > 0 and \
+         self._zero_reward_indices[0] < cut_frame_index:
+        self._zero_reward_indices.popleft()
         
-      if len(self._neg_reward_indices) > 0 and \
-         self._neg_reward_indices[0] < cut_frame_index:
-        self._neg_reward_indices.popleft()
+      if len(self._non_zero_reward_indices) > 0 and \
+         self._non_zero_reward_indices[0] < cut_frame_index:
+        self._non_zero_reward_indices.popleft()
 
 
   def is_full(self):
@@ -100,7 +99,7 @@ class Experience(object):
   def sample_sequence(self, sequence_size):
     # -1 for the case if start pos is the terminated frame.
     # (Then +1 not to start from terminated frame.)
-    start_pos = self.random_state.randint(0, self._history_size - sequence_size -1)
+    start_pos = np.random.randint(0, self._history_size - sequence_size -1)
 
     if self._frames[start_pos].terminal:
       start_pos += 1
@@ -122,24 +121,24 @@ class Experience(object):
     """
     Sample 4 successive frames for reward prediction.
     """
-    if self.random_state.randint(2) == 0:
-      from_neg = True
+    if np.random.randint(2) == 0:
+      from_zero = True
     else:
-      from_neg = False
+      from_zero = False
     
-    if len(self._pos_reward_indices) == 0:
-      # pos rewards container was empty
-      from_neg = True
-    elif len(self._neg_reward_indices) == 0:
-      # neg rewards container was empty
-      from_neg = False
+    if len(self._zero_reward_indices) == 0:
+      # zero rewards container was empty
+      from_zero = False
+    elif len(self._non_zero_reward_indices) == 0:
+      # non zero rewards container was empty
+      from_zero = True
 
-    if from_neg:
-      index = self.random_state.randint(len(self._neg_reward_indices))
-      end_frame_index = self._neg_reward_indices[index]
+    if from_zero:
+      index = np.random.randint(len(self._zero_reward_indices))
+      end_frame_index = self._zero_reward_indices[index]
     else:
-      index = self.random_state.randint(len(self._pos_reward_indices))
-      end_frame_index = self._pos_reward_indices[index]
+      index = np.random.randint(len(self._non_zero_reward_indices))
+      end_frame_index = self._non_zero_reward_indices[index]
 
     start_frame_index = end_frame_index-3
     raw_start_frame_index = start_frame_index - self._top_frame_index

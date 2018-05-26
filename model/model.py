@@ -105,12 +105,12 @@ class UnrealModel(object):
 
   def _create_network(self, for_display):
     scope_name = "net_{0}".format(self._thread_index)
-    with tf.device(self._device), tf.variable_scope(scope_name):
+    with tf.device(self._device), tf.variable_scope(scope_name) as scope:
       # lstm
       self.lstm_cell = contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
       
       # [base A3C network]
-      self._create_base_network(for_display)
+      self._create_base_network()
 
       # [Pixel change network]
       if self._use_pixel_change:
@@ -135,7 +135,7 @@ class UnrealModel(object):
       self.global_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=scope_name)
 
 
-  def _create_base_network(self, for_display=False):
+  def _create_base_network(self):
     with tf.name_scope("base_network") as scope:
       # State (Base image input)
       self.base_input = tf.placeholder("float", [None, self._image_shape[0], self._image_shape[1], 3], name='base_input')
@@ -173,7 +173,6 @@ class UnrealModel(object):
         self.base_dec_output = self.decoder(base_enc_output)
         self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
         self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
-
       elif self.segnet_mode == 3 and self._use_lstm:
         self.base_segm_mask = tf.placeholder("int32", [None] + self._image_shape, name='base_segm_mask')
 
@@ -186,7 +185,6 @@ class UnrealModel(object):
 
         self.preds = tf.to_int32(tf.argmax(self.base_dec_output, axis=-1), name="preds")
         self.probs = tf.nn.softmax(self.base_dec_output, name="probs")  # probability distributions
-
 
   def encoder(self, state_input, reuse=False):
     with tf.variable_scope("base_encoder", reuse=reuse) as scope:
@@ -358,7 +356,7 @@ class UnrealModel(object):
 
 
   def _base_policy_layer(self, lstm_outputs, reuse=False):
-    with tf.name_scope("base_policy_layer") as scope:
+    with tf.variable_scope("base_policy_layer", reuse=reuse) as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # Weight for policy output layer
       W_fc_p, b_fc_p = self._fc_variable([input_size, self._action_size], "base_fc_p")
@@ -515,7 +513,6 @@ class UnrealModel(object):
     # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
     self.value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
 
-
     self.base_loss = self.policy_loss + self.value_loss
     decoder_loss = None
     
@@ -543,7 +540,6 @@ class UnrealModel(object):
 
     return self.base_loss, decoder_loss
 
-  
   def _pc_loss(self):
     # [pixel change]
     self.pc_a = tf.placeholder("float", [None, self._action_size], name='pc_a')
@@ -586,7 +582,6 @@ class UnrealModel(object):
       loss = base_loss
       if decoder_loss is not None:
         loss += decoder_loss
-
 
       if self._use_pixel_change:
         self.pc_loss = self._pc_loss()
