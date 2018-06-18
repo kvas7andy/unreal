@@ -103,10 +103,10 @@ class IndoorEnvironment(environment.Environment):
     image = image / 255.0
     return image
 
-  def process(self, action):
+  def process(self, action, flag=1):
     real_action = IndoorEnvironment.ACTION_LIST[action]
 
-    full_state = self._sim.step(real_action)
+    full_state = self._sim.step(real_action, flag=flag)
     #print("Step made")
     self._last_full_state = full_state  # Last observed state
     obs = full_state['observation']['sensors']['color']['data']

@@ -341,7 +341,7 @@ class Application(object):
 
     self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary, 'sr_input':sr_summary,
                             'losses_input': tf.summary.merge(losses_summary_list),
-                            'entropy': tf.summary.scalar('entropy_stepTD', tf.reduce_mean(self.entropy_input)),
+                            'entropy': tf.summary.scalar('all/eval/entropy_stepTD', tf.reduce_mean(self.entropy_input)),
                             'term_global_t': term_summary}
     flags.checkpoint_dir = os.path.join(base_dir, flags.checkpoint_dir)
     #print("First dirs {}::{}".format(flags.log_dir, flags.checkpoint_dir))

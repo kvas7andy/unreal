@@ -16,8 +16,8 @@ from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
-LOG_INTERVAL = 100
-PERFORMANCE_LOG_INTERVAL = 1000
+LOG_INTERVAL = 1000
+PERFORMANCE_LOG_INTERVAL = 2000
 LOSS_AND_EVAL_LOG_INTERVAL = 5000
 
 GPU_LOG = False # Change main.py
@@ -121,7 +121,7 @@ class Trainer(object):
       # For log output
       self.prev_local_t = -1
       self.prev_local_t_loss = 0
-      self.sr_size = 100
+      self.sr_size = 50
       self.success_rates = deque(maxlen=self.sr_size)
     except Exception as e:
       print(str(e))#, flush=True)
@@ -191,7 +191,7 @@ class Trainer(object):
                                                               last_action_reward)
     action = self.choose_action(pi_)
     
-    new_state, reward, terminal, pixel_change = self.environment.process(action)
+    new_state, reward, terminal, pixel_change = self.environment.process(action, flag=0)
 
     frame = ExperienceFrame({key: val for key, val in prev_state.items() if 'objectType' not in key},
                             reward, action, terminal, pixel_change,
@@ -232,7 +232,7 @@ class Trainer(object):
 
     mode = "segnet" if self.segnet_mode >= 2 else ""
     # t_max times loop
-
+    flag = 0
     for _ in range(self.n_step_TD):
       # Prepare last action reward
       last_action = self.environment.last_action
@@ -256,11 +256,12 @@ class Trainer(object):
         print("Trainer {}>>> Local step {}:".format(self.thread_index, self.local_t))
         print("Trainer {}>>> pi={}".format(self.thread_index, pi_))
         print("Trainer {}>>> V={}".format(self.thread_index, value_))
+        flag = 1
 
       prev_state = self.environment.last_state
 
       # Process game
-      new_state, reward, terminal, pixel_change = self.environment.process(action)
+      new_state, reward, terminal, pixel_change = self.environment.process(action, flag=flag)
       frame = ExperienceFrame({key: val for key, val in prev_state.items() if 'objectType' not in key},
                               reward, action, terminal, pixel_change,
                               last_action, last_reward)
@@ -290,6 +291,8 @@ class Trainer(object):
         self.episode_reward = 0
         self.environment.reset()
         self.local_network.reset_state()
+        if flag:
+          flag = 0
         break
 
     R = 0.0
