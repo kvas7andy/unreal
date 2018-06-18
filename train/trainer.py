@@ -7,7 +7,7 @@ import numpy as np
 import time
 import json
 
-import sys
+from collections import deque
 
 import tensorflow as tf
 from tensorflow.python.client import timeline
@@ -121,6 +121,8 @@ class Trainer(object):
       # For log output
       self.prev_local_t = -1
       self.prev_local_t_loss = 0
+      self.sr_size = 100
+      self.success_rates = deque(maxlen=self.sr_size)
     except Exception as e:
       print(str(e))#, flush=True)
       raise Exception("Problem in Trainer {} initialization".format(thread_index))
@@ -151,7 +153,8 @@ class Trainer(object):
       summary_str = sess.run(summary_op, feed_dict={
         score_input: score
       })
-      summary_writer.add_summary(summary_str, global_t)
+      for sum_wr in summary_writer:
+        sum_wr.add_summary(summary_str, global_t)
 
   def _record_all(self, sess, summary_writer, summary_op,
                     dict_input, dict_eval, global_t):
@@ -162,7 +165,8 @@ class Trainer(object):
       for key in dict_input.keys():
         feed_dict.update({dict_input[key]: dict_eval[key]})
       summary_str = sess.run(summary_op, feed_dict=feed_dict)
-      summary_writer.add_summary(summary_str, global_t)
+      for sum_wr in summary_writer:
+        sum_wr.add_summary(summary_str, global_t)
 
     
   def set_start_time(self, start_time):
@@ -276,6 +280,12 @@ class Trainer(object):
         print("Trainer {}>>> score={}".format(self.thread_index, self.episode_reward))#, flush=True)
 
         summary_dict['values'].update({'score_input': self.episode_reward})
+
+        success = 1 if self.environment._last_full_state["success"] else 0
+        #print("Type:", type(self.environment._last_full_state["success"]), len(self.success_rates), success)
+        self.success_rates.append(success)
+        summary_dict['values'].update({'sr_input': np.mean(self.success_rates)
+                                    if len(self.success_rates) == self.sr_size else 0})
           
         self.episode_reward = 0
         self.environment.reset()
@@ -423,7 +433,7 @@ class Trainer(object):
     return batch_rp_si, batch_rp_c
 
   def process(self, sess, global_t, summary_writer, summary_op_dict,
-              score_input, eval_input, entropy_input, term_global_t, losses_input):
+              score_input, sr_input, eval_input, entropy_input, term_global_t, losses_input):
 
     if self.prev_local_t == -1 and self.segnet_mode >= 2:
       self.prev_local_t = 0
@@ -458,9 +468,12 @@ class Trainer(object):
     if summary_dict['values'].get('score_input', None) is not None:
       self._record_one(sess, summary_writer, summary_op_dict['score_input'], score_input,
                        summary_dict['values']['score_input'], global_t)
-      self._record_one(sess, summary_writer, summary_op_dict['term_global_t'], term_global_t,
-                       global_t, global_t)
-      summary_writer.flush()
+      self._record_one(sess, summary_writer, summary_op_dict['sr_input'], sr_input,
+                       summary_dict['values']['sr_input'], global_t)
+      #self._record_one(sess, summary_writer, summary_op_dict['term_global_t'], term_global_t,
+      #                 global_t, global_t)
+      #summary_writer[0].flush()
+      # summary_writer[1].flush()
       # Return advanced local step size
       episode_score =summary_dict['values'].get('score_input', None)
       summary_dict['values'] = {}
@@ -599,7 +612,8 @@ class Trainer(object):
                          return_list[-1], global_t)
       self._record_one(sess, summary_writer, summary_op_dict['entropy'], entropy_input,
                        entropy, global_t)
-      summary_writer.flush()
+      # summary_writer[0].flush()
+      # summary_writer[1].flush()
       print(return_string)
       self.prev_local_t_loss += LOSS_AND_EVAL_LOG_INTERVAL
 

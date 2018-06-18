@@ -6,6 +6,8 @@ from __future__ import print_function
 import tensorflow as tf
 from tensorflow.python.client import timeline
 
+from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
+
 import threading
 import signal
 import math
@@ -31,8 +33,8 @@ base_dir = "/root/hdd/repos/minos_unreal"
 
 # get command line args
 flags = get_options("training")
-flags.checkpoint_dir = os.path.join(base_dir, flags.checkpoint_dir)
-flags.log_dir = os.path.join(flags.checkpoint_dir, flags.log_dir)
+flags.log_dir = os.path.join(base_dir, flags.checkpoint_dir, flags.log_dir)
+
 
 if flags.segnet >= 1:
   flags.use_pixel_change = False
@@ -114,23 +116,24 @@ class Application(object):
                                             self.summary_writer[parallel_index],
                                             self.summary_op_dict,
                                             self.score_input,
+                                            self.sr_input,
                                             self.mIoU_input,
                                             self.entropy_input,
                                             self.term_global_t,
                                             self.losses_input)
 
         self.global_t += diff_global_t
-        if parallel_index == 0 and score is not None:
-            #print("Got score", flush=True)
-            self.last_scores += [score]
-            if len(self.last_scores) >= 50:
-                print("Last scores len >= 50")
-                cur_score = np.mean(self.last_scores)
-                print("Best score: {}, Cur score: {}".format(self.best_score, cur_score))
-                self.last_scores = self.last_scores[-10:]
-                if cur_score > self.best_score:
-                    self.best_score = cur_score
-                    self.save(name="best-checkpoint")
+        # if parallel_index == 0 and score is not None:
+        #     #print("Got score", flush=True)
+        #     self.last_scores += [score]
+        #     if len(self.last_scores) >= 50:
+        #         print("Last scores len >= 50")
+        #         cur_score = np.mean(self.last_scores)
+        #         print("Best score: {}, Cur score: {}".format(self.best_score, cur_score))
+        #         self.last_scores = self.last_scores[-10:]
+        #         if cur_score > self.best_score:
+        #             self.best_score = cur_score
+        #             self.save(name="best-checkpoint")
 
         # [n.name for n in tf.get_default_graph().as_graph_def().node]
         # [op for op in tf.get_default_graph().get_operations()] #op.name
@@ -289,6 +292,7 @@ class Application(object):
 
     # summary for tensorboard
     self.score_input = tf.placeholder(tf.float32)
+    self.sr_input = tf.placeholder(tf.float32)
     self.mIoU_input = tf.placeholder(tf.float32)
     self.term_global_t = tf.placeholder(tf.int32)
 
@@ -327,6 +331,7 @@ class Application(object):
       self.losses_input.update({'all/rp_loss': self.rp_loss})
 
     score_summary = tf.summary.scalar("all/eval/score", self.score_input)
+    sr_summary = tf.summary.scalar("all/eval/success_rate", self.sr_input)
     term_summary = tf.summary.scalar("all/eval/term_global_t", self.term_global_t)
     eval_summary = tf.summary.scalar("all/eval/mIoU_all", self.mIoU_input)
     losses_summary_list = []
@@ -334,21 +339,28 @@ class Application(object):
       losses_summary_list += [tf.summary.scalar(key, val)]
 
 
-    self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary,
+    self.summary_op_dict = {'score_input': score_summary, 'eval_input': eval_summary, 'sr_input':sr_summary,
                             'losses_input': tf.summary.merge(losses_summary_list),
                             'entropy': tf.summary.scalar('entropy_stepTD', tf.reduce_mean(self.entropy_input)),
                             'term_global_t': term_summary}
-    self.summary_writer = [tf.summary.FileWriter(os.path.join(flags.log_dir, 'worker_{}'.format(i)),
-                                                self.sess.graph) for i in range(flags.parallel_size)]
+    flags.checkpoint_dir = os.path.join(base_dir, flags.checkpoint_dir)
+    #print("First dirs {}::{}".format(flags.log_dir, flags.checkpoint_dir))
+    flags.checkpoint_dir = flags.checkpoint_dir
+    print("Checkpoint dir: {}, Log dir: {}".format(flags.checkpoint_dir, flags.log_dir))
+    overall_FW = tf.summary.FileWriter(os.path.join(flags.log_dir, 'overall'),
+                          self.sess.graph)
+    self.summary_writer = [(tf.summary.FileWriter(os.path.join(flags.log_dir, 'worker_{}'.format(i)),
+                                                self.sess.graph), overall_FW) for i in range(flags.parallel_size)]
     
     # init or load checkpoint with saver
     self.saver = tf.train.Saver(self.global_network.get_global_vars(), max_to_keep=20)
 
 
     
-    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir, latest_filename ="best-checkpoint")
-    if checkpoint is None or checkpoint.model_checkpoint_path is None:
-      checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    #checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir, latest_filename ="best-checkpoint")
+    #if checkpoint is None or checkpoint.model_checkpoint_path is None:
+    #  checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
+    checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
 
     if checkpoint and checkpoint.model_checkpoint_path:
       if flags.segnet == -1:
@@ -381,7 +393,7 @@ class Application(object):
             if len(tokens) > 3:
               best_score = float('-0.'+file.split('-')[2]) if 'best' in file else float('-0.'+file.split('-')[1])
               if best_score > max_best_score:
-                g_step = int(file.split('-')[3]) if 'best' in file else int(file.split('-')[2])
+                g_step = int(file.split('-')[3]).split('.')[0] if 'best' in file else int(file.split('-')[2].split('.')[0])
                 if max_g_step < g_step:
                   max_g_step = g_step
             else:
@@ -405,7 +417,8 @@ class Application(object):
       with open(wall_t_fname, 'r') as f:
         self.wall_t = float(f.read())
         self.next_save_steps = (self.global_t + flags.save_interval_step) // flags.save_interval_step * flags.save_interval_step
-
+      print_tensors_in_checkpoint_file(file_name=checkpoint.model_checkpoint_path,
+                                     tensor_name='', all_tensors=False, all_tensor_names=True)
     else:
       print("Could not find old checkpoint")
       # set wall time
@@ -414,27 +427,27 @@ class Application(object):
     print("Global step {}, max best score {}".format(self.global_t, self.best_score))
 
     if flags.segnet_pretrain:
-        checkpoint_dir = "../erfnet_segmentation/models"
-        checkpoint_dir = os.path.join(checkpoint_dir, "aug_erfnetC_0_{}x{}_{}x/snapshots_best".format(
-            self.image_shape[1],
-            self.image_shape[0],
-            self.map_file.split('_')[1].split('x')[0]))
-        checkpoint = tf.train.get_checkpoint_state(checkpoint_dir)
+      checkpoint_dir = "../erfnet_segmentation/models"
+      checkpoint_dir = os.path.join(checkpoint_dir, "aug_erfnetC_0_{}x{}_{}x/snapshots_best".format(
+          self.image_shape[1],
+          self.image_shape[0],
+          self.map_file.split('_')[1].split('x')[0]))
+      checkpoint = tf.train.get_checkpoint_state(checkpoint_dir)
 
-        big_weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_encoder')
-        big_weights += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_decoder')
+      big_weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_encoder')
+      big_weights += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='net_-1/base_decoder')
 
-        erfnet_weights = [l.name.split(':')[0].rsplit('net_-1/base_encoder/')[-1] for l in big_weights
-               if len(l.name.split(':')[0].rsplit('net_-1/base_encoder/')) == 2]
-        erfnet_weights += [l.name.split(':')[0].rsplit('net_-1/base_decoder/')[-1] for l in big_weights
-                if len(l.name.split(':')[0].rsplit('net_-1/base_decoder/')) == 2]
+      erfnet_weights = [l.name.split(':')[0].rsplit('net_-1/base_encoder/')[-1] for l in big_weights
+             if len(l.name.split(':')[0].rsplit('net_-1/base_encoder/')) == 2]
+      erfnet_weights += [l.name.split(':')[0].rsplit('net_-1/base_decoder/')[-1] for l in big_weights
+              if len(l.name.split(':')[0].rsplit('net_-1/base_decoder/')) == 2]
 
-        if checkpoint and checkpoint.model_checkpoint_path:
-            saver2 = tf.train.Saver(var_list=dict(zip(erfnet_weights, big_weights)))
-            saver2.restore(self.sess, checkpoint.model_checkpoint_path)
-            print("ErfNet pretrained weights restored from file ", checkpoint_dir)
-        else:
-            print("Can't load pretrained weights for ErfNet from file ", checkpoint_dir)
+      if checkpoint and checkpoint.model_checkpoint_path:
+          saver2 = tf.train.Saver(var_list=dict(zip(erfnet_weights, big_weights)))
+          saver2.restore(self.sess, checkpoint.model_checkpoint_path)
+          print("ErfNet pretrained weights restored from file ", checkpoint_dir)
+      else:
+          print("Can't load pretrained weights for ErfNet from file ", checkpoint_dir)
 
     # run training threads
     self.train_threads = []

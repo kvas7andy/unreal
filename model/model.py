@@ -356,7 +356,7 @@ class UnrealModel(object):
 
 
   def _base_policy_layer(self, lstm_outputs, reuse=False):
-    with tf.name_scope("base_policy_layer") as scope:
+    with tf.variable_scope("base_policy_layer", reuse=reuse) as scope:
       input_size = lstm_outputs.get_shape().as_list()[1]
       # Weight for policy output layer
       W_fc_p, b_fc_p = self._fc_variable([input_size, self._action_size], "base_fc_p")
